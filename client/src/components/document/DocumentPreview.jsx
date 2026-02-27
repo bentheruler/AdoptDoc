@@ -1,2 +1,2 @@
 // client/src/components/document/DocumentPreview.jsx
-// Component to preview documents, now with theme support.
+// Component to render iframe preview and theme switcher.

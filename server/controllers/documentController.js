@@ -1,2 +1,2 @@
 // server/controllers/documentController.js
-// Controllers for document-related routes.
+// Controller for document operations, including preview and download.

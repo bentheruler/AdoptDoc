@@ -1,2 +1,2 @@
 // server/routes/documentRoutes.js
-// Routes for documents, including resume preview and PDF export.
+// Routes for documents, including preview and download endpoints.

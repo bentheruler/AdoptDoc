@@ -1,24 +1,15 @@
-# AdoptDoc Project - Theme Integration
+# AdoptDoc Project - Structure and Theme Update
 
-This document outlines the integration of JSON Resume themes into the AdoptDoc project, enabling dynamic theme application for resumes and documents.
-
-## Features
-
-- **Document Management**: Create, edit, version history, preview.
-- **Templating**: Use predefined templates to generate documents.
-- **AI Integration**: AI-powered document processing and analysis.
-- **JSON Resume Theme Integration**: Dynamically render documents using various JSON Resume themes.
-- **Authentication & Authorization**: Secure user access with role-based control.
-- **Admin Dashboard**: For managing users and system settings.
+This document outlines the project structure and the integration of themes into AdoptDoc, enabling dynamic theme application for documents and resumes.
 
 ## Project Structure
 
 ```plaintext
-├── client/                          # React Frontend
+├── client/
 │   ├── public/
 │   │   └── index.html
 │   ├── src/
-│   │   ├── assets/                  # Images, fonts, icons
+│   │   ├── assets/
 │   │   ├── components/
 │   │   │   ├── common/
 │   │   │   │   ├── Navbar.jsx
@@ -31,11 +22,11 @@ This document outlines the integration of JSON Resume themes into the AdoptDoc p
 │   │   │   ├── document/
 │   │   │   │   ├── DocumentCard.jsx
 │   │   │   │   ├── DocumentEditor.jsx
-│   │   │   │   ├── DocumentPreview.jsx
+│   │   │   │   ├── DocumentPreview.jsx       ← renders iframe preview + theme switcher
 │   │   │   │   └── VersionHistory.jsx
 │   │   │   ├── template/
 │   │   │   │   ├── TemplateCard.jsx
-│   │   │   │   └── TemplateSelector.jsx
+│   │   │   │   └── TemplateSelector.jsx      ← lists themes per doc type
 │   │   │   └── customization/
 │   │   │       └── CustomizationPanel.jsx
 │   │   ├── pages/
@@ -58,7 +49,7 @@ This document outlines the integration of JSON Resume themes into the AdoptDoc p
 │   │   │   ├── authService.js
 │   │   │   ├── documentService.js
 │   │   │   ├── aiService.js
-│   │   │   └── templateService.js
+│   │   │   └── templateService.js            ← calls GET /api/templates/themes
 │   │   ├── utils/
 │   │   │   ├── pdfExport.js
 │   │   │   └── formatDate.js
@@ -69,51 +60,73 @@ This document outlines the integration of JSON Resume themes into the AdoptDoc p
 │   ├── .env
 │   └── package.json
 │
-├── server/                          # Node.js + Express Backend
+├── server/
 │   ├── config/
-│   │   ├── db.js                    # MongoDB connection
-│   │   └── env.js                   # Environment variable loader
+│   │   ├── db.js
+│   │   └── env.js
+│   │
 │   ├── controllers/
 │   │   ├── authController.js
-│   │   ├── documentController.js
-│   │   ├── templateController.js
+│   │   ├── documentController.js             ← calls renderDocument() for preview/download
+│   │   ├── templateController.js             ← calls getAvailableThemes()
 │   │   ├── aiController.js
 │   │   └── adminController.js
+│   │
 │   ├── middleware/
-│   │   ├── authMiddleware.js        # JWT verification
-│   │   ├── roleMiddleware.js        # Admin/User RBAC
-│   │   ├── errorMiddleware.js       # Global error handler
-│   │   └── rateLimitMiddleware.js   # API rate limiting
+│   │   ├── authMiddleware.js
+│   │   ├── roleMiddleware.js
+│   │   ├── errorMiddleware.js
+│   │   └── rateLimitMiddleware.js
+│   │
 │   ├── models/
 │   │   ├── User.js
-│   │   ├── Document.js
+│   │   ├── Document.js                       ← stores docType + content (JSON) + theme
 │   │   └── Template.js
+│   │
 │   ├── routes/
 │   │   ├── authRoutes.js
-│   │   ├── documentRoutes.js
-│   │   ├── templateRoutes.js
+│   │   ├── documentRoutes.js                 ← /:id/preview  /:id/download
+│   │   ├── templateRoutes.js                 ← GET /themes
 │   │   ├── aiRoutes.js
 │   │   └── adminRoutes.js
+│   │
 │   ├── services/
 │   │   ├── ai/
-│   │   │   ├── AIProvider.js        # Abstract interface
-│   │   │   ├── OpenAIService.js     # OpenAI implementation
-│   │   │   ├── GeminiService.js     # Gemini implementation
-│   │   │   └── FailoverManager.js  # Failover + logging logic
-│   │   ├── pdfService.js            # PDF generation logic
-│   │   └── promptService.js        # Dynamic prompt construction
+│   │   │   ├── AIProvider.js
+│   │   │   ├── OpenAIService.js
+│   │   │   ├── GeminiService.js
+│   │   │   └── FailoverManager.js
+│   │   ├── resumeRenderService.js            ← NEW: renderDocument() + getAvailableThemes()
+│   │   ├── pdfService.js                     ← NEW: Puppeteer PDF generation logic
+│   │   └── promptService.js
+│   │
+│   ├── templates/                            ← NEW FOLDER
+│   │   ├── coverLetter.js                    ← classic, modern themes
+│   │   └── proposal.js                       ← formal, clean themes
+│   │    (CV themes come from npm packages)
+│   │
 │   ├── utils/
-│   │   ├── logger.js                # API failure / event logging
-│   │   └── tokenUtils.js           # JWT helpers
-│   ├── logs/                        # Log files (gitignored)
-│   ├── app.js                       # Express app setup
-│   ├── server.js                    # Entry point
+│   │   ├── logger.js
+│   │   └── tokenUtils.js
+│   │
+│   ├── logs/
+│   ├── app.js
+│   ├── server.js
 │   ├── .env
 │   └── package.json
 │
 ├── .gitignore
 └── README.md
 ```
+
+## Features
+
+- **Document Management**: Create, edit, version history, preview.
+- **Templating**: Use predefined templates to generate documents.
+- **AI Integration**: AI-powered document processing and analysis.
+- **Theme Integration**: Dynamically render documents using various themes (JSON Resume themes from npm, custom themes in `server/templates/`).
+- **Authentication & Authorization**: Secure user access with role-based control.
+- **Admin Dashboard**: For managing users and system settings.
 
 ## Getting Started
 

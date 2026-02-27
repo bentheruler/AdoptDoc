@@ -1,2 +1,2 @@
 // server/routes/templateRoutes.js
-// Routes for templates.
+// Routes for fetching available themes.
