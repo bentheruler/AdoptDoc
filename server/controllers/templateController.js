@@ -1,2 +1,2 @@
 // server/controllers/templateController.js
-// Controllers for template-related routes.
+// Controller to get available themes.

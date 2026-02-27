@@ -1,2 +1,2 @@
 // client/src/components/template/TemplateSelector.jsx
-// Component for selecting document templates.
+// Component to list available themes for a document type.
