@@ -13,11 +13,107 @@ This document outlines the integration of JSON Resume themes into the AdoptDoc p
 
 ## Project Structure
 
-- **client/**: React Frontend application.
-- **server/**: Node.js + Express Backend application.
-  - **services/resumeRenderService.js**: New service to handle resume rendering with themes.
-  - **services/pdfService.js**: Updated to handle PDF generation logic moved from routes.
-  - **routes/documentRoutes.js**: Updated to include preview and PDF export endpoints.
+```plaintext
+├── client/                          # React Frontend
+│   ├── public/
+│   │   └── index.html
+│   ├── src/
+│   │   ├── assets/                  # Images, fonts, icons
+│   │   ├── components/
+│   │   │   ├── common/
+│   │   │   │   ├── Navbar.jsx
+│   │   │   │   ├── Sidebar.jsx
+│   │   │   │   ├── Loader.jsx
+│   │   │   │   └── ProtectedRoute.jsx
+│   │   │   ├── auth/
+│   │   │   │   ├── LoginForm.jsx
+│   │   │   │   └── RegisterForm.jsx
+│   │   │   ├── document/
+│   │   │   │   ├── DocumentCard.jsx
+│   │   │   │   ├── DocumentEditor.jsx
+│   │   │   │   ├── DocumentPreview.jsx
+│   │   │   │   └── VersionHistory.jsx
+│   │   │   ├── template/
+│   │   │   │   ├── TemplateCard.jsx
+│   │   │   │   └── TemplateSelector.jsx
+│   │   │   └── customization/
+│   │   │       └── CustomizationPanel.jsx
+│   │   ├── pages/
+│   │   │   ├── auth/
+│   │   │   │   ├── LoginPage.jsx
+│   │   │   │   └── RegisterPage.jsx
+│   │   │   ├── dashboard/
+│   │   │   │   └── DashboardPage.jsx
+│   │   │   ├── document/
+│   │   │   │   ├── NewDocumentPage.jsx
+│   │   │   │   └── EditDocumentPage.jsx
+│   │   │   └── admin/
+│   │   │       └── AdminDashboardPage.jsx
+│   │   ├── context/
+│   │   │   └── AuthContext.jsx
+│   │   ├── hooks/
+│   │   │   ├── useAuth.js
+│   │   │   └── useDocument.js
+│   │   ├── services/
+│   │   │   ├── authService.js
+│   │   │   ├── documentService.js
+│   │   │   ├── aiService.js
+│   │   │   └── templateService.js
+│   │   ├── utils/
+│   │   │   ├── pdfExport.js
+│   │   │   └── formatDate.js
+│   │   ├── styles/
+│   │   │   └── global.css
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── .env
+│   └── package.json
+│
+├── server/                          # Node.js + Express Backend
+│   ├── config/
+│   │   ├── db.js                    # MongoDB connection
+│   │   └── env.js                   # Environment variable loader
+│   ├── controllers/
+│   │   ├── authController.js
+│   │   ├── documentController.js
+│   │   ├── templateController.js
+│   │   ├── aiController.js
+│   │   └── adminController.js
+│   ├── middleware/
+│   │   ├── authMiddleware.js        # JWT verification
+│   │   ├── roleMiddleware.js        # Admin/User RBAC
+│   │   ├── errorMiddleware.js       # Global error handler
+│   │   └── rateLimitMiddleware.js   # API rate limiting
+│   ├── models/
+│   │   ├── User.js
+│   │   ├── Document.js
+│   │   └── Template.js
+│   ├── routes/
+│   │   ├── authRoutes.js
+│   │   ├── documentRoutes.js
+│   │   ├── templateRoutes.js
+│   │   ├── aiRoutes.js
+│   │   └── adminRoutes.js
+│   ├── services/
+│   │   ├── ai/
+│   │   │   ├── AIProvider.js        # Abstract interface
+│   │   │   ├── OpenAIService.js     # OpenAI implementation
+│   │   │   ├── GeminiService.js     # Gemini implementation
+│   │   │   └── FailoverManager.js  # Failover + logging logic
+│   │   ├── pdfService.js            # PDF generation logic
+│   │   └── promptService.js        # Dynamic prompt construction
+│   ├── utils/
+│   │   ├── logger.js                # API failure / event logging
+│   │   └── tokenUtils.js           # JWT helpers
+│   ├── logs/                        # Log files (gitignored)
+│   ├── app.js                       # Express app setup
+│   ├── server.js                    # Entry point
+│   ├── .env
+│   └── package.json
+│
+├── .gitignore
+└── README.md
+```
 
 ## Getting Started
 
