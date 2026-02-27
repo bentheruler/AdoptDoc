@@ -1,0 +1,14 @@
+# Ignore build output
+/client/build
+/server/node_modules
+
+# Ignore logs
+/server/logs
+
+# Ignore environment variables
+.env
+client/.env
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
