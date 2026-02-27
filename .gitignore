@@ -1,6 +1,7 @@
 # Ignore build output
 /client/build
-/server/node_modules
+/server/build
+node_modules/
 
 # Ignore logs
 /server/logs
@@ -12,3 +13,8 @@ client/.env
 # Ignore OS generated files
 .DS_Store
 Thumbs.db
+# Ignore sensitive files
+*.pub
+document
+id_ed25519
+id_rsa
