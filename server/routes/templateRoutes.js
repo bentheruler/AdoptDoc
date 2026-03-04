@@ -1,2 +1,8 @@
-// server/routes/templateRoutes.js
-// Routes for fetching available themes.
+const express = require('express');
+const router = express.Router();
+const templateController = require('../controllers/templateController');
+
+// GET /api/templates/themes
+router.get('/themes', templateController.getThemes);
+
+module.exports = router;
