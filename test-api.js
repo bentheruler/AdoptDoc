@@ -25,9 +25,9 @@ async function testApi() {
     try {
       const aiRes = await axios.post(`${BASE_URL}/ai/generate`, {
         docType: "resume",
-        userData: {
-          name: "John Doe",
-          summary: "Software Engineering student building AI tools."
+        userData: { 
+          name: "John Doe", 
+          summary: "Software Engineering student building AI tools." 
         }
       }, { timeout: 65000 });
       console.log('✅ Success! AI Response:', JSON.stringify(aiRes.data.content, null, 2));
