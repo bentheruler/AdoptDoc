@@ -1,0 +1,245 @@
+/* client/src/pages/dashboard/Dashboard.css */
+/* NEW FILE — co-located with DashboardPage (not in original structure) */
+
+/* ── Page layout ──────────────────────────────────────────── */
+.dashboard-page {
+  padding: 32px 40px;
+  max-width: 1100px;
+  overflow-y: auto;
+}
+
+.dashboard-page__banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.dashboard-page__heading {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin: 0 0 4px;
+}
+
+.dashboard-page__subheading {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ── Stats row ────────────────────────────────────────────── */
+.dashboard-page__stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 36px;
+}
+
+.stats-card {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stats-card__icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.stats-card__value {
+  font-size: 28px;
+  font-weight: 800;
+  color: #1e3a5f;
+  line-height: 1;
+}
+
+.stats-card__label {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+/* ── Recent documents section ─────────────────────────────── */
+.recent-docs__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.recent-docs__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin: 0;
+}
+
+.recent-docs__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.recent-docs__search {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1e293b;
+  background: #f8fafc;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.recent-docs__search:focus {
+  border-color: #3b82f6;
+}
+
+.recent-docs__filters {
+  display: flex;
+  gap: 6px;
+}
+
+.filter-btn {
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #f8fafc;
+  font-size: 12px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.filter-btn:hover {
+  border-color: #1e3a5f;
+  color: #1e3a5f;
+}
+
+.filter-btn--active {
+  background: #1e3a5f;
+  border-color: #1e3a5f;
+  color: #fff;
+}
+
+.recent-docs__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Document card ────────────────────────────────────────── */
+.document-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: box-shadow 0.15s;
+}
+
+.document-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+
+.document-card__badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-bottom: 4px;
+}
+
+.document-card__badge--cv           { background: #eff6ff; color: #1e3a5f; }
+.document-card__badge--cover_letter { background: #f0fdf4; color: #166534; }
+.document-card__badge--proposal     { background: #fefce8; color: #854d0e; }
+
+.document-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 4px;
+}
+
+.document-card__meta {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.document-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Shared button styles ─────────────────────────────────── */
+.btn {
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn--primary {
+  background: #1e3a5f;
+  color: #fff;
+  padding: 8px 18px;
+  font-size: 13px;
+}
+
+.btn--primary:hover { background: #1e4a7f; }
+
+.btn--ghost {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 6px 14px;
+  font-size: 12px;
+}
+
+.btn--ghost:hover { background: #e2e8f0; }
+
+.btn--danger {
+  background: #fef2f2;
+  color: #ef4444;
+  padding: 6px 14px;
+  font-size: 12px;
+}
+
+.btn--danger:hover { background: #fee2e2; }
+
+/* ── Empty / error states ─────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.empty-state p   { margin-bottom: 16px; }
+.error-text      { color: #ef4444; font-size: 14px; padding: 12px 0; }
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .dashboard-page          { padding: 20px 16px; }
+  .dashboard-page__stats   { flex-direction: column; }
+  .recent-docs__controls   { flex-direction: column; align-items: stretch; }
+  .document-card           { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .document-card__actions  { width: 100%; justify-content: flex-end; }
+}
