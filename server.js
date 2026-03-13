@@ -2,11 +2,16 @@ require('dotenv').config();
 
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
+
 
 const app = express();
 
-app.use(cors());
+const cors = require("cors");
+
+app.use(cors({
+  origin: "http://localhost:3000",
+  credentials: true
+}));
 app.use(express.json());
 
 mongoose.connect(process.env.MONGO_URI)
@@ -14,6 +19,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.log("Mongo Error:", err));
 
 app.use('/api/auth', require('./routes/auth'));
+
 
 app.get('/', (req, res) => {
   res.send("API Running...");
