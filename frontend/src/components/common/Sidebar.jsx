@@ -1,13 +1,18 @@
 import React from 'react';
 import { SIDEBAR_ITEMS } from '../../constants';
 
-const Sidebar = ({ activeTab, onNavigate, isOpen, user }) => {
+const Sidebar = ({ activeTab, onNavigate, isOpen, user, onLogout }) => {
   const initials = user?.name
     ?.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
 
   const handleLogout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
+    if (onLogout) {
+      onLogout();
+    } else {
+      // Fallback if no onLogout provided
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+    }
     window.location.href = "/login";
   };
 
@@ -53,7 +58,7 @@ const Sidebar = ({ activeTab, onNavigate, isOpen, user }) => {
           onClick={handleLogout} 
           style={{ 
             width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 10px", background: "transparent", 
-            border: "none", borderRadius: 8, cursor: "pointer", color: "#fb7185", fontSize: 13, fontWeight: 600, textAlign: "left", whiteSpace: "nowrap", transition: "all 0.15s" 
+            border: "none", borderRadius: 8, cursor: "pointer", color: "#fb7185", fontSize: 13, fontWeight: 600, textAlign: "left", whiteSpace: "nowrap", transition: "all 0.15s"
           }}
         >
           <span style={{ fontSize: 16, flexShrink: 0 }}>⬅</span>
@@ -66,7 +71,7 @@ const Sidebar = ({ activeTab, onNavigate, isOpen, user }) => {
         <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
           {initials}
         </div>
-        {isOpen && <span style={{ color: '#93c5fd', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name || 'User'}</span>}
+        {isOpen && <span style={{ color: '#93c5fd', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', title: user?.name || user?.email || 'User' }}>{user?.name || user?.email || 'User'}</span>}
       </div>
     </div>
   );

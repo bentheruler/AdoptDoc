@@ -74,7 +74,10 @@ const Register = () => {
         state: { message: 'Registration successful! Please log in.' } 
       });
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      console.error('Registration error', err);
+      setError(
+        err.response?.data?.message || err.message || 'Registration failed. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
