@@ -1,32 +1,26 @@
-// client/src/pages/dashboard/DashboardPage.jsx
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } from 'docx';
 import { saveAs } from 'file-saver';
 import { useAuth } from '../../context/AuthContext';
 
-// Layout components (in structure ✓)
-import Sidebar             from '../../components/common/Sidebar';
-import Navbar              from '../../components/common/Navbar';
+import Sidebar from '../../components/common/Sidebar';
+import Navbar from '../../components/common/Navbar';
 
-// Feature components (in structure ✓)
-import CustomizationPanel  from '../../components/customization/CustomizationPanel';
-import DocumentEditor      from '../../components/document/DocumentEditor';
-import DocumentPreview     from '../../components/document/DocumentPreview';
-import TemplateSelector    from '../../components/template/TemplateSelector';
+import CustomizationPanel from '../../components/customization/CustomizationPanel';
+import DocumentEditor from '../../components/document/DocumentEditor';
+import DocumentPreview from '../../components/document/DocumentPreview';
+import TemplateSelector from '../../components/template/TemplateSelector';
 
-// Document renderers (in structure ✓)
-import CVPreview           from '../../components/document/CVPreview';
-import CoverLetterPreview  from '../../components/document/CoverLetterPreview';
-import ProposalPreview     from '../../components/document/ProposalPreview';
+import CVPreview from '../../components/document/CVPreview';
+import CoverLetterPreview from '../../components/document/CoverLetterPreview';
+import ProposalPreview from '../../components/document/ProposalPreview';
 
-// Home tab — NEW file (see comment in HomeTab.jsx)
-import HomeTab             from '../../pages/dashboard/HomeTab';
+import HomeTab from '../../pages/dashboard/HomeTab';
 
-// Default data & constants
 import { DEFAULT_CV, DEFAULT_COVER_LETTER, DEFAULT_PROPOSAL } from '../../constants';
+import { generateDocumentAI } from '../../services/aiService';
 
-// ── PDF lib loader ────────────────────────────────────────────
 async function loadPdfLibs() {
   const load = (src) =>
     new Promise((res, rej) => {
@@ -46,39 +40,6 @@ async function loadPdfLibs() {
   }
 }
 
-const defaultFormState = {
-cv: {
-  name: '',
-  phone: '',
-  email1: '',
-  email2: '',
-  linkedin: '',
-  title: '',
-  location: '',
-  skills: [],
-  education: [],
-  experience: [],
-  summary: '',
-  projects: [],
-  certifications: [],
-  references: 'Available upon request'
-},
-  cover_letter: {
-    name: '',
-    email: '',
-    company: '',
-    position: '',
-    skills: '',
-    experience: ''
-  },
-  business_proposal: {
-    business: '',
-    market: '',
-    problem: '',
-    solution: ''
-  }
-};
-
 const safe = (val) => {
   if (!val) return '';
   if (typeof val === 'string') return val;
@@ -93,12 +54,13 @@ const mapAICvToPreview = (content) => {
     name: safe(content?.basics?.name),
     phone: safe(content?.basics?.phone),
     email1: safe(content?.basics?.email),
+    email2: safe(content?.basics?.email2),
     linkedin: safe(content?.basics?.linkedin),
     title: safe(content?.basics?.title || content?.basics?.role || content?.basics?.headline),
     location: safe(
       content?.basics?.location ||
-      content?.basics?.address ||
-      content?.basics?.city
+        content?.basics?.address ||
+        content?.basics?.city
     ),
     summary: safe(content?.basics?.summary),
 
@@ -107,16 +69,18 @@ const mapAICvToPreview = (content) => {
       : [],
 
     education: Array.isArray(content?.education)
-      ? content.education.map((edu) => {
-          if (typeof edu === 'string') return edu;
-          return [
-            safe(edu.degree),
-            safe(edu.institution || edu.school || edu.university),
-            safe(edu.date || edu.year || edu.graduationDate)
-          ]
-            .filter(Boolean)
-            .join(' - ');
-        }).filter(Boolean)
+      ? content.education
+          .map((edu) => {
+            if (typeof edu === 'string') return edu;
+            return [
+              safe(edu.degree),
+              safe(edu.institution || edu.school || edu.university),
+              safe(edu.date || edu.year || edu.graduationDate)
+            ]
+              .filter(Boolean)
+              .join(' - ');
+          })
+          .filter(Boolean)
       : [],
 
     experience: Array.isArray(content?.work)
@@ -149,30 +113,75 @@ const mapAICvToPreview = (content) => {
 const DashboardPage = () => {
   const { user, logoutUser } = useAuth();
   const navigate = useNavigate();
-  
-  // Layout state
-  const [activeTab,   setActiveTab]   = useState('home');
+
+  const [activeTab, setActiveTab] = useState('home');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [documents, setDocuments] = useState([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
+
   const previewRef = useRef(null);
 
-  // Document state
-  const [category,        setCategory]        = useState('CV');
-  const [theme,           setTheme]           = useState('Modern');
-  const [fontSize,        setFontSize]        = useState('12 pt');
-  const [accentColor,     setAccentColor]     = useState('#1e3a5f');
-  const [editMode,        setEditMode]        = useState(false);
-  const [cvData,          setCvData]          = useState(DEFAULT_CV);
-  const [coverLetterData, setCoverLetterData] = useState(DEFAULT_COVER_LETTER);
-  const [proposalData,    setProposalData]    = useState(DEFAULT_PROPOSAL);
-  const [pdfLoading,      setPdfLoading]      = useState(false);
-  const [wordLoading,     setWordLoading]     = useState(false);
+  const [category, setCategory] = useState('CV');
+  const [theme, setTheme] = useState('Modern');
+  const [fontSize, setFontSize] = useState('12 pt');
+  const [accentColor, setAccentColor] = useState('#1e3a5f');
+  const [editMode, setEditMode] = useState(false);
 
-  // Load documents from localStorage on mount
+  const [cvData, setCvData] = useState({
+    ...DEFAULT_CV,
+    phone: DEFAULT_CV.phone || '',
+    linkedin: DEFAULT_CV.linkedin || '',
+    education: DEFAULT_CV.education || [],
+    projects: DEFAULT_CV.projects || [],
+    certifications: DEFAULT_CV.certifications || [],
+    references: DEFAULT_CV.references || 'Available upon request'
+  });
+
+  const [coverLetterData, setCoverLetterData] = useState(DEFAULT_COVER_LETTER);
+  const [proposalData, setProposalData] = useState(DEFAULT_PROPOSAL);
+
+  const [generatedText, setGeneratedText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [wordLoading, setWordLoading] = useState(false);
+
+  const docType =
+    category === 'CV'
+      ? 'cv'
+      : category === 'Cover Letter'
+      ? 'cover_letter'
+      : 'business_proposal';
+
+  const currentFields =
+    docType === 'cv'
+      ? cvData
+      : docType === 'cover_letter'
+      ? coverLetterData
+      : proposalData;
+
+  const updateField = (field, value) => {
+    if (docType === 'cv') {
+      setCvData((prev) => ({ ...prev, [field]: value }));
+    } else if (docType === 'cover_letter') {
+      setCoverLetterData((prev) => ({ ...prev, [field]: value }));
+    } else {
+      setProposalData((prev) => ({ ...prev, [field]: value }));
+    }
+  };
+
   useEffect(() => {
     loadDocuments();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'documents') {
+      loadDocuments();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    setGeneratedText('');
+  }, [category]);
 
   const loadDocuments = () => {
     try {
@@ -187,33 +196,75 @@ const DashboardPage = () => {
     }
   };
 
-  // ── Save draft ──────────────────────────────────────────────
+  const handleGenerate = async () => {
+    try {
+      setAiLoading(true);
+
+      const res = await generateDocumentAI(docType, currentFields);
+      console.log('AI response:', res);
+
+      if (docType === 'cv' && res.content) {
+        const mappedCv = mapAICvToPreview(res.content);
+        console.log('Mapped CV:', mappedCv);
+        setCvData((prev) => ({ ...prev, ...mappedCv }));
+        setGeneratedText('');
+      } else {
+        const generated =
+          res.document ||
+          res.generatedText ||
+          res.message ||
+          '';
+        setGeneratedText(generated);
+      }
+    } catch (error) {
+      console.error('AI generation error:', error.response?.data || error.message);
+      alert(error.response?.data?.error || 'AI generation failed');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const handleSaveDraft = () => {
-    const draft = { 
+    const draft = {
       id: Date.now().toString(),
-      cvData, 
-      coverLetterData, 
-      proposalData, 
-      theme, 
-      fontSize, 
-      accentColor, 
-      category, 
+      cvData,
+      coverLetterData,
+      proposalData,
+      theme,
+      fontSize,
+      accentColor,
+      category,
       savedAt: new Date().toLocaleString(),
-      type: category.toLowerCase().replace(' ', '-'),
+      type: category.toLowerCase().replace(' ', '_'),
       title: `${category} - ${new Date().toLocaleDateString()}`
     };
-    
-    // Save to localStorage
+
     const existing = JSON.parse(localStorage.getItem('adaptdoc_documents') || '[]');
     const updated = [draft, ...existing];
     localStorage.setItem('adaptdoc_documents', JSON.stringify(updated));
     setDocuments(updated);
-    
-    // Show success message (in real app, would be a toast)
+
     alert(`${category} draft saved successfully!`);
   };
 
-  // ── PDF export ──────────────────────────────────────────────
+  const handleDeleteDocument = (id) => {
+    const updated = documents.filter((d) => d.id !== id);
+    localStorage.setItem('adaptdoc_documents', JSON.stringify(updated));
+    setDocuments(updated);
+  };
+
+  const handleOpenDocument = (doc) => {
+    if (doc.category) {
+      setCategory(doc.category);
+    }
+
+    if (doc.cvData) setCvData(doc.cvData);
+    if (doc.coverLetterData) setCoverLetterData(doc.coverLetterData);
+    if (doc.proposalData) setProposalData(doc.proposalData);
+
+    setActiveTab('create');
+  };
+
   const handleDownloadPDF = async () => {
     if (!previewRef.current) return;
 
@@ -256,58 +307,79 @@ const DashboardPage = () => {
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'documents') {
-      loadDocuments();
-    }
-  }, [activeTab]);
+  const handleDownloadWord = async () => {
+    try {
+      setWordLoading(true);
 
-  useEffect(() => {
-    setGeneratedText('');
-  }, [docType]);
+      const ac = accentColor.replace('#', '');
+      const doc = new Document({
+        sections: [
+          {
+            properties: {},
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: cvData.name || '', bold: true, size: 36, color: '1e3a5f' })],
+                spacing: { after: 80 }
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: cvData.title || '', size: 22, color: '555555' })],
+                spacing: { after: 60 }
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({
+                    text: `${cvData.location || ''} | ${cvData.email1 || ''} | ${cvData.phone || ''}`,
+                    size: 18,
+                    color: '777777'
+                  })
+                ],
+                spacing: { after: 200 }
+              }),
+              new Paragraph({
+                border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '1e3a5f' } },
+                spacing: { after: 160 }
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: 'SUMMARY', bold: true, size: 22, color: '1e3a5f' })],
+                spacing: { after: 80 }
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: cvData.summary || '', size: 20, color: '333333' })],
+                spacing: { after: 200 }
+              })
+            ]
+          }
+        ]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `${(cvData.name || 'document').replace(/\s+/g, '_')}_CV.docx`);
+    } catch (error) {
+      console.error(error);
+      alert('Word export failed');
+    } finally {
+      setWordLoading(false);
+    }
+  };
 
   const renderForm = () => {
     if (docType === 'cv') {
       return (
         <div style={styles.formGrid}>
-          <input
-            style={styles.input}
-            placeholder="Full Name"
-            value={currentFields.name || ''}
-            onChange={(e) => updateField('name', e.target.value)}
-          />
-
-          <input
-            style={styles.input}
-            placeholder="Email"
-            value={currentFields.email1 || ''}
-            onChange={(e) => updateField('email1', e.target.value)}
-          />
-
-          <input
-            style={styles.input}
-            placeholder="Job Title"
-            value={typeof currentFields.title === 'string' ? currentFields.title : ''}
-            onChange={(e) => updateField('title', e.target.value)}
-          />
-
-          <input
-            style={styles.input}
-            placeholder="Location"
-            value={typeof currentFields.location === 'string' ? currentFields.location : ''}
-            onChange={(e) => updateField('location', e.target.value)}
-          />
+          <input style={styles.input} placeholder="Full Name" value={cvData.name || ''} onChange={(e) => updateField('name', e.target.value)} />
+          <input style={styles.input} placeholder="Phone" value={cvData.phone || ''} onChange={(e) => updateField('phone', e.target.value)} />
+          <input style={styles.input} placeholder="Email" value={cvData.email1 || ''} onChange={(e) => updateField('email1', e.target.value)} />
+          <input style={styles.input} placeholder="LinkedIn" value={cvData.linkedin || ''} onChange={(e) => updateField('linkedin', e.target.value)} />
+          <input style={styles.input} placeholder="Job Title" value={typeof cvData.title === 'string' ? cvData.title : ''} onChange={(e) => updateField('title', e.target.value)} />
+          <input style={styles.input} placeholder="Location" value={typeof cvData.location === 'string' ? cvData.location : ''} onChange={(e) => updateField('location', e.target.value)} />
 
           <input
             style={styles.input}
             placeholder="Skills (comma separated)"
-            value={
-              Array.isArray(currentFields.skills)
-                ? currentFields.skills.join(', ')
-                : typeof currentFields.skills === 'string'
-                ? currentFields.skills
-                : ''
-            }
+            value={Array.isArray(cvData.skills) ? cvData.skills.join(', ') : ''}
             onChange={(e) =>
               updateField(
                 'skills',
@@ -319,13 +391,7 @@ const DashboardPage = () => {
           <input
             style={styles.input}
             placeholder="Education (comma separated)"
-            value={
-              Array.isArray(currentFields.education)
-                ? currentFields.education.join(', ')
-                : typeof currentFields.education === 'string'
-                ? currentFields.education
-                : ''
-            }
+            value={Array.isArray(cvData.education) ? cvData.education.join(', ') : ''}
             onChange={(e) =>
               updateField(
                 'education',
@@ -337,7 +403,7 @@ const DashboardPage = () => {
           <textarea
             style={styles.textareaFull}
             placeholder="Professional Summary"
-            value={typeof currentFields.summary === 'string' ? currentFields.summary : ''}
+            value={typeof cvData.summary === 'string' ? cvData.summary : ''}
             onChange={(e) => updateField('summary', e.target.value)}
           />
 
@@ -345,19 +411,26 @@ const DashboardPage = () => {
             style={styles.textareaFull}
             placeholder="Experience"
             value={
-              Array.isArray(currentFields.experience)
-                ? currentFields.experience
+              Array.isArray(cvData.experience)
+                ? cvData.experience
                     .map((exp) =>
                       typeof exp === 'string'
                         ? exp
                         : `${exp.role || ''} at ${exp.company || ''}`.trim()
                     )
                     .join(', ')
-                : typeof currentFields.experience === 'string'
-                ? currentFields.experience
                 : ''
             }
-            onChange={(e) => updateField('experience', e.target.value)}
+            onChange={(e) =>
+              updateField('experience', [
+                {
+                  company: '',
+                  period: '',
+                  role: e.target.value,
+                  bullets: []
+                }
+              ])
+            }
           />
         </div>
       );
@@ -366,73 +439,62 @@ const DashboardPage = () => {
     if (docType === 'cover_letter') {
       return (
         <div style={styles.formGrid}>
-          <input
-            style={styles.input}
-            placeholder="Full Name"
-            value={currentFields.name || ''}
-            onChange={(e) => updateField('name', e.target.value)}
-          />
-          <input
-            style={styles.input}
-            placeholder="Email"
-            value={currentFields.email || ''}
-            onChange={(e) => updateField('email', e.target.value)}
-          />
-          <input
-            style={styles.input}
-            placeholder="Company"
-            value={currentFields.company || ''}
-            onChange={(e) => updateField('company', e.target.value)}
-          />
-          <input
-            style={styles.input}
-            placeholder="Position"
-            value={currentFields.position || ''}
-            onChange={(e) => updateField('position', e.target.value)}
-          />
-          <textarea
-            style={styles.textareaFull}
-            placeholder="Skills"
-            value={currentFields.skills || ''}
-            onChange={(e) => updateField('skills', e.target.value)}
-          />
-          <textarea
-            style={styles.textareaFull}
-            placeholder="Experience"
-            value={currentFields.experience || ''}
-            onChange={(e) => updateField('experience', e.target.value)}
-          />
+          <input style={styles.input} placeholder="Full Name" value={coverLetterData.name || ''} onChange={(e) => updateField('name', e.target.value)} />
+          <input style={styles.input} placeholder="Email" value={coverLetterData.email || ''} onChange={(e) => updateField('email', e.target.value)} />
+          <input style={styles.input} placeholder="Company" value={coverLetterData.company || ''} onChange={(e) => updateField('company', e.target.value)} />
+          <input style={styles.input} placeholder="Position" value={coverLetterData.position || ''} onChange={(e) => updateField('position', e.target.value)} />
+          <textarea style={styles.textareaFull} placeholder="Skills" value={coverLetterData.skills || ''} onChange={(e) => updateField('skills', e.target.value)} />
+          <textarea style={styles.textareaFull} placeholder="Experience" value={coverLetterData.experience || ''} onChange={(e) => updateField('experience', e.target.value)} />
         </div>
       );
     }
 
     return (
       <div style={styles.formGrid}>
-        <input
-          style={styles.input}
-          placeholder="Business Name"
-          value={currentFields.business || ''}
-          onChange={(e) => updateField('business', e.target.value)}
-        />
-        <input
-          style={styles.input}
-          placeholder="Target Market"
-          value={currentFields.market || ''}
-          onChange={(e) => updateField('market', e.target.value)}
-        />
-        <textarea
-          style={styles.textareaFull}
-          placeholder="Problem Statement"
-          value={currentFields.problem || ''}
-          onChange={(e) => updateField('problem', e.target.value)}
-        />
-        <textarea
-          style={styles.textareaFull}
-          placeholder="Proposed Solution"
-          value={currentFields.solution || ''}
-          onChange={(e) => updateField('solution', e.target.value)}
-        />
+        <input style={styles.input} placeholder="Business Name" value={proposalData.business || ''} onChange={(e) => updateField('business', e.target.value)} />
+        <input style={styles.input} placeholder="Target Market" value={proposalData.market || ''} onChange={(e) => updateField('market', e.target.value)} />
+        <textarea style={styles.textareaFull} placeholder="Problem Statement" value={proposalData.problem || ''} onChange={(e) => updateField('problem', e.target.value)} />
+        <textarea style={styles.textareaFull} placeholder="Proposed Solution" value={proposalData.solution || ''} onChange={(e) => updateField('solution', e.target.value)} />
       </div>
+    );
+  };
+
+  const renderPreview = () => {
+    if (category === 'Cover Letter') {
+      return (
+        <CoverLetterPreview
+          data={coverLetterData}
+          onDataChange={setCoverLetterData}
+          theme={theme}
+          fontSize={fontSize}
+          accentColor={accentColor}
+          editMode={editMode}
+        />
+      );
+    }
+
+    if (category === 'Proposal') {
+      return (
+        <ProposalPreview
+          data={proposalData}
+          onDataChange={setProposalData}
+          theme={theme}
+          fontSize={fontSize}
+          accentColor={accentColor}
+          editMode={editMode}
+        />
+      );
+    }
+
+    return (
+      <CVPreview
+        data={cvData}
+        onDataChange={setCvData}
+        theme={theme}
+        fontSize={fontSize}
+        accentColor={accentColor}
+        editMode={editMode}
+      />
     );
   };
 
@@ -446,7 +508,6 @@ const DashboardPage = () => {
         onLogout={logoutUser}
       />
 
-      {/* Main column */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Navbar onToggleSidebar={() => setSidebarOpen((p) => !p)} user={user} onLogout={logoutUser} />
 
@@ -461,23 +522,14 @@ const DashboardPage = () => {
           )}
 
           {activeTab === 'create' && (
-            <div style={styles.createWrap}>
-              <div style={styles.headerBar}>
-                <div>
-                  <h2 style={styles.heading}>Create Document</h2>
-                  <p style={styles.subtext}>Fill the form, generate with AI, preview, then save.</p>
-                </div>
-
-                <select
-                  value={docType}
-                  onChange={(e) => setDocType(e.target.value)}
-                  style={styles.select}
-                >
-                  <option value="cv">CV</option>
-                  <option value="cover_letter">Cover Letter</option>
-                  <option value="business_proposal">Business Proposal</option>
-                </select>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+              <DocumentEditor
+                category={category}
+                onCategoryChange={setCategory}
+                editMode={editMode}
+                onToggleEditMode={() => setEditMode((p) => !p)}
+                onSaveDraft={handleSaveDraft}
+              />
 
               {renderForm()}
 
@@ -495,28 +547,30 @@ const DashboardPage = () => {
                 </button>
               </div>
 
-              <div ref={previewRef} style={styles.previewBox}>
-                <h3 style={styles.previewTitle}>Preview</h3>
+              <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+                <CustomizationPanel cvData={cvData} onCVUpdate={setCvData} />
 
-                {docType === 'cv' ? (
-                  <CVPreview
-                    data={formState.cv}
-                    onDataChange={(updated) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        cv: updated
-                      }))
-                    }
-                    theme="Modern"
-                    fontSize="12 pt"
-                    accentColor="#1e3a5f"
-                    editMode={false}
-                  />
-                ) : generatedText ? (
-                  <div style={styles.previewText}>{generatedText}</div>
-                ) : (
-                  <p style={styles.placeholder}>No document generated yet.</p>
-                )}
+                <DocumentPreview
+                  ref={previewRef}
+                  editMode={editMode}
+                  onToggleEditMode={() => setEditMode((p) => !p)}
+                >
+                  {renderPreview()}
+                </DocumentPreview>
+
+                <TemplateSelector
+                  theme={theme}
+                  onThemeChange={setTheme}
+                  fontSize={fontSize}
+                  onFontSizeChange={setFontSize}
+                  accentColor={accentColor}
+                  onAccentChange={setAccentColor}
+                  onDownloadPDF={handleDownloadPDF}
+                  pdfLoading={pdfLoading}
+                  onDownloadWord={handleDownloadWord}
+                  wordLoading={wordLoading}
+                  thumbnail={renderPreview()}
+                />
               </div>
             </div>
           )}
@@ -526,61 +580,72 @@ const DashboardPage = () => {
               <div style={{ maxWidth: 1200 }}>
                 <h2 style={{ color: '#1e3a5f', marginBottom: 8, fontSize: 24, fontWeight: 700 }}>My Documents</h2>
                 <p style={{ color: '#64748b', marginBottom: 28 }}>Manage all your saved documents</p>
-                
+
                 {loadingDocuments && <p style={{ color: '#94a3b8' }}>Loading documents...</p>}
-                
+
                 {!loadingDocuments && documents.length === 0 && (
-                  <div style={{ 
-                    background: '#fff', 
-                    border: '1px solid #e2e8f0', 
-                    borderRadius: 12, 
-                    padding: 40, 
-                    textAlign: 'center',
-                    color: '#64748b'
-                  }}>
-                    <p>No documents yet. <button onClick={() => setActiveTab('create')} style={{ background: 'none', border: 'none', color: '#1e3a5f', fontWeight: 600, cursor: 'pointer' }}>Create one to get started →</button></p>
+                  <div
+                    style={{
+                      background: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 12,
+                      padding: 40,
+                      textAlign: 'center',
+                      color: '#64748b'
+                    }}
+                  >
+                    <p>
+                      No documents yet.
+                      <button
+                        onClick={() => setActiveTab('create')}
+                        style={{ background: 'none', border: 'none', color: '#1e3a5f', fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        {' '}Create one to get started →
+                      </button>
+                    </p>
                   </div>
                 )}
 
                 {!loadingDocuments && documents.length > 0 && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 16 }}>
                     {documents.map((doc) => (
-                      <div key={doc.id} style={{ 
-                        background: '#fff', 
-                        border: '1px solid #e2e8f0', 
-                        borderRadius: 10, 
-                        padding: 16,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
-                        boxShadow: '0 1px 3px #0001'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 12px #0004'}
-                      onMouseLeave={(e) => e.currentTarget.style.boxShadow = '0 1px 3px #0001'}
+                      <div
+                        key={doc.id}
+                        style={{
+                          background: '#fff',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 10,
+                          padding: 16,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                          boxShadow: '0 1px 3px #0001'
+                        }}
+                        onClick={() => handleOpenDocument(doc)}
+                        onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 12px #0004')}
+                        onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 1px 3px #0001')}
                       >
                         <div>
                           <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 14, marginBottom: 4 }}>{doc.title}</div>
                           <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Type: {doc.type}</div>
                           <div style={{ fontSize: 12, color: '#94a3b8' }}>Saved: {doc.savedAt}</div>
                         </div>
-                        <button 
+
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Delete document logic here
-                            const updated = documents.filter(d => d.id !== doc.id);
-                            localStorage.setItem('adaptdoc_documents', JSON.stringify(updated));
-                            setDocuments(updated);
+                            handleDeleteDocument(doc.id);
                           }}
-                          style={{ 
+                          style={{
                             marginTop: 12,
-                            background: '#fef2f2', 
-                            border: '1px solid #fee2e2', 
-                            borderRadius: 6, 
-                            padding: '6px 12px', 
-                            cursor: 'pointer', 
-                            fontSize: 12, 
+                            background: '#fef2f2',
+                            border: '1px solid #fee2e2',
+                            borderRadius: 6,
+                            padding: '6px 12px',
+                            cursor: 'pointer',
+                            fontSize: 12,
                             color: '#dc2626',
                             fontWeight: 500
                           }}
@@ -599,22 +664,24 @@ const DashboardPage = () => {
             <div style={{ padding: 40, overflow: 'auto', flex: 1 }}>
               <div style={{ maxWidth: 600 }}>
                 <h2 style={{ color: '#1e3a5f', marginBottom: 8, fontSize: 24, fontWeight: 700 }}>Settings</h2>
-                
+
                 <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24, marginBottom: 16 }}>
                   <h3 style={{ color: '#1e3a5f', marginBottom: 16, fontWeight: 600 }}>Account Information</h3>
+
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ display: 'block', marginBottom: 4, color: '#475569', fontWeight: 500, fontSize: 14 }}>Name</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={user?.name || user?.email || 'User'}
                       readOnly
                       style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 14 }}
                     />
                   </div>
+
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ display: 'block', marginBottom: 4, color: '#475569', fontWeight: 500, fontSize: 14 }}>Email</label>
-                    <input 
-                      type="email" 
+                    <input
+                      type="email"
                       value={user?.email || ''}
                       readOnly
                       style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 14 }}
@@ -622,17 +689,17 @@ const DashboardPage = () => {
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => {
                     logoutUser();
                     navigate('/login');
                   }}
-                  style={{ 
-                    background: '#dc2626', 
-                    color: '#fff', 
-                    border: 'none', 
-                    borderRadius: 8, 
-                    padding: '10px 20px', 
+                  style={{
+                    background: '#dc2626',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '10px 20px',
                     cursor: 'pointer',
                     fontWeight: 600,
                     fontSize: 14
@@ -668,33 +735,6 @@ const styles = {
     display: 'flex',
     flexDirection: 'column'
   },
-  createWrap: {
-    padding: 24,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 16
-  },
-  headerBar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 16,
-    flexWrap: 'wrap'
-  },
-  heading: {
-    margin: 0,
-    color: '#1e3a5f'
-  },
-  subtext: {
-    margin: '6px 0 0',
-    color: '#64748b'
-  },
-  select: {
-    padding: 10,
-    borderRadius: 8,
-    border: '1px solid #cbd5e1',
-    minWidth: 220
-  },
   formGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -719,7 +759,10 @@ const styles = {
   buttonRow: {
     display: 'flex',
     gap: 12,
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
+    padding: '12px 24px',
+    background: '#fff',
+    borderBottom: '1px solid #e2e8f0'
   },
   primaryBtn: {
     background: '#1e3a5f',
@@ -736,63 +779,6 @@ const styles = {
     padding: '10px 16px',
     borderRadius: 8,
     cursor: 'pointer'
-  },
-  deleteBtn: {
-    background: '#dc2626',
-    color: '#fff',
-    border: 'none',
-    padding: '8px 12px',
-    borderRadius: 8,
-    cursor: 'pointer'
-  },
-  smallBtn: {
-    background: '#1e3a5f',
-    color: '#fff',
-    border: 'none',
-    padding: '8px 12px',
-    borderRadius: 8,
-    cursor: 'pointer'
-  },
-  previewBox: {
-    background: '#fff',
-    borderRadius: 12,
-    border: '1px solid #e2e8f0',
-    padding: 20,
-    minHeight: 350
-  },
-  previewTitle: {
-    marginTop: 0,
-    color: '#1e3a5f'
-  },
-  previewText: {
-    whiteSpace: 'pre-wrap',
-    lineHeight: 1.7,
-    color: '#0f172a'
-  },
-  placeholder: {
-    color: '#64748b'
-  },
-  documentsWrap: {
-    padding: 24
-  },
-  docList: {
-    display: 'grid',
-    gap: 16,
-    marginTop: 20
-  },
-  docCard: {
-    background: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    border: '1px solid #e2e8f0',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 16
-  },
-  docActions: {
-    display: 'flex',
-    gap: 8
   }
 };
 
