@@ -1,15 +1,32 @@
-import { useEffect, useRef, useState } from 'react';
-import Sidebar from '../../components/common/Sidebar';
-import Navbar from '../../components/common/Navbar';
-import HomeTab from './HomeTab';
-import CVPreview from '../../components/document/CVPreview';
-import { generateDocumentAI } from '../../services/aiService';
-import {
-  createDocument,
-  getDocuments,
-  deleteDocument
-} from '../../services/documentService';
+// client/src/pages/dashboard/DashboardPage.jsx
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } from 'docx';
+import { saveAs } from 'file-saver';
+import { useAuth } from '../../context/AuthContext';
 
+// Layout components (in structure ✓)
+import Sidebar             from '../../components/common/Sidebar';
+import Navbar              from '../../components/common/Navbar';
+
+// Feature components (in structure ✓)
+import CustomizationPanel  from '../../components/customization/CustomizationPanel';
+import DocumentEditor      from '../../components/document/DocumentEditor';
+import DocumentPreview     from '../../components/document/DocumentPreview';
+import TemplateSelector    from '../../components/template/TemplateSelector';
+
+// Document renderers (in structure ✓)
+import CVPreview           from '../../components/document/CVPreview';
+import CoverLetterPreview  from '../../components/document/CoverLetterPreview';
+import ProposalPreview     from '../../components/document/ProposalPreview';
+
+// Home tab — NEW file (see comment in HomeTab.jsx)
+import HomeTab             from '../../pages/dashboard/HomeTab';
+
+// Default data & constants
+import { DEFAULT_CV, DEFAULT_COVER_LETTER, DEFAULT_PROPOSAL } from '../../constants';
+
+// ── PDF lib loader ────────────────────────────────────────────
 async function loadPdfLibs() {
   const load = (src) =>
     new Promise((res, rej) => {
@@ -130,147 +147,73 @@ const mapAICvToPreview = (content) => {
 };
 
 const DashboardPage = () => {
-  const [activeTab, setActiveTab] = useState('create');
+  const { user, logoutUser } = useAuth();
+  const navigate = useNavigate();
+  
+  // Layout state
+  const [activeTab,   setActiveTab]   = useState('home');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  const [docType, setDocType] = useState('cv');
-  const [formState, setFormState] = useState(defaultFormState);
-
-  const [generatedText, setGeneratedText] = useState('');
   const [documents, setDocuments] = useState([]);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [docsLoading, setDocsLoading] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
-
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
   const previewRef = useRef(null);
 
-  const currentFields = formState[docType];
+  // Document state
+  const [category,        setCategory]        = useState('CV');
+  const [theme,           setTheme]           = useState('Modern');
+  const [fontSize,        setFontSize]        = useState('12 pt');
+  const [accentColor,     setAccentColor]     = useState('#1e3a5f');
+  const [editMode,        setEditMode]        = useState(false);
+  const [cvData,          setCvData]          = useState(DEFAULT_CV);
+  const [coverLetterData, setCoverLetterData] = useState(DEFAULT_COVER_LETTER);
+  const [proposalData,    setProposalData]    = useState(DEFAULT_PROPOSAL);
+  const [pdfLoading,      setPdfLoading]      = useState(false);
+  const [wordLoading,     setWordLoading]     = useState(false);
 
-  const updateField = (field, value) => {
-    setFormState((prev) => ({
-      ...prev,
-      [docType]: {
-        ...prev[docType],
-        [field]: value
-      }
-    }));
-  };
+  // Load documents from localStorage on mount
+  useEffect(() => {
+    loadDocuments();
+  }, []);
 
-  const handleGenerate = async () => {
+  const loadDocuments = () => {
     try {
-      setAiLoading(true);
-
-      const res = await generateDocumentAI(docType, currentFields);
-      console.log('AI response:', res);
-
-      if (docType === 'cv' && res.content) {
-        const mappedCv = mapAICvToPreview(res.content);
-        console.log('Mapped CV:', mappedCv);
-
-        setFormState((prev) => ({
-          ...prev,
-          cv: mappedCv
-        }));
-
-        setGeneratedText('');
-      } else {
-        const generated =
-          res.document ||
-          res.generatedText ||
-          res.message ||
-          '';
-
-        setGeneratedText(generated);
-      }
-    } catch (error) {
-      console.error('AI generation error:', error.response?.data || error.message);
-      alert(error.response?.data?.error || 'AI generation failed');
+      setLoadingDocuments(true);
+      const saved = JSON.parse(localStorage.getItem('adaptdoc_documents') || '[]');
+      setDocuments(saved);
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+      setDocuments([]);
     } finally {
-      setAiLoading(false);
+      setLoadingDocuments(false);
     }
   };
 
-  const handleSaveDraft = async () => {
-    try {
-      const titleMap = {
-        cv: 'CV Draft',
-        cover_letter: 'Cover Letter Draft',
-        business_proposal: 'Business Proposal Draft'
-      };
-
-      const contentToSave =
-        docType === 'cv'
-          ? formState.cv
-          : generatedText
-          ? { generatedText }
-          : currentFields;
-
-      await createDocument({
-        title: titleMap[docType],
-        type: docType,
-        content: contentToSave
-      });
-
-      alert('Draft saved successfully');
-    } catch (error) {
-      console.error('Save draft error:', error.response?.data || error.message);
-      alert('Failed to save draft');
-    }
+  // ── Save draft ──────────────────────────────────────────────
+  const handleSaveDraft = () => {
+    const draft = { 
+      id: Date.now().toString(),
+      cvData, 
+      coverLetterData, 
+      proposalData, 
+      theme, 
+      fontSize, 
+      accentColor, 
+      category, 
+      savedAt: new Date().toLocaleString(),
+      type: category.toLowerCase().replace(' ', '-'),
+      title: `${category} - ${new Date().toLocaleDateString()}`
+    };
+    
+    // Save to localStorage
+    const existing = JSON.parse(localStorage.getItem('adaptdoc_documents') || '[]');
+    const updated = [draft, ...existing];
+    localStorage.setItem('adaptdoc_documents', JSON.stringify(updated));
+    setDocuments(updated);
+    
+    // Show success message (in real app, would be a toast)
+    alert(`${category} draft saved successfully!`);
   };
 
-  const loadDocuments = async () => {
-    try {
-      setDocsLoading(true);
-      const data = await getDocuments();
-      console.log('Documents loaded:', data);
-      setDocuments(data);
-    } catch (error) {
-      console.error('Load documents error:', error.response?.data || error.message);
-      alert('Failed to load documents');
-    } finally {
-      setDocsLoading(false);
-    }
-  };
-
-  const handleOpenDocument = (doc) => {
-    const type = doc.type || 'cv';
-    setDocType(type);
-
-    if (type === 'cv') {
-      setFormState((prev) => ({
-        ...prev,
-        cv: {
-          ...defaultFormState.cv,
-          ...doc.content
-        }
-      }));
-      setGeneratedText('');
-    } else if (doc.content?.generatedText) {
-      setGeneratedText(doc.content.generatedText);
-    } else {
-      setGeneratedText('');
-      setFormState((prev) => ({
-        ...prev,
-        [type]: {
-          ...prev[type],
-          ...doc.content
-        }
-      }));
-    }
-
-    setActiveTab('create');
-  };
-
-  const handleDeleteDocument = async (id) => {
-    try {
-      await deleteDocument(id);
-      await loadDocuments();
-    } catch (error) {
-      console.error('Delete document error:', error.response?.data || error.message);
-      alert('Failed to delete document');
-    }
-  };
-
+  // ── PDF export ──────────────────────────────────────────────
   const handleDownloadPDF = async () => {
     if (!previewRef.current) return;
 
@@ -499,19 +442,21 @@ const DashboardPage = () => {
         activeTab={activeTab}
         onNavigate={setActiveTab}
         isOpen={sidebarOpen}
-        user={null}
+        user={user}
+        onLogout={logoutUser}
       />
 
-      <div style={styles.main}>
-        <Navbar onToggleSidebar={() => setSidebarOpen((p) => !p)} />
+      {/* Main column */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Navbar onToggleSidebar={() => setSidebarOpen((p) => !p)} user={user} onLogout={logoutUser} />
 
         <div style={styles.content}>
           {activeTab === 'home' && (
             <HomeTab
-              user={null}
-              stats={null}
+              user={user}
               documents={documents}
               onNavigate={setActiveTab}
+              loadingDocuments={loadingDocuments}
             />
           )}
 
@@ -577,41 +522,125 @@ const DashboardPage = () => {
           )}
 
           {activeTab === 'documents' && (
-            <div style={styles.documentsWrap}>
-              <h2 style={styles.heading}>My Documents</h2>
+            <div style={{ padding: 40, overflow: 'auto', flex: 1 }}>
+              <div style={{ maxWidth: 1200 }}>
+                <h2 style={{ color: '#1e3a5f', marginBottom: 8, fontSize: 24, fontWeight: 700 }}>My Documents</h2>
+                <p style={{ color: '#64748b', marginBottom: 28 }}>Manage all your saved documents</p>
+                
+                {loadingDocuments && <p style={{ color: '#94a3b8' }}>Loading documents...</p>}
+                
+                {!loadingDocuments && documents.length === 0 && (
+                  <div style={{ 
+                    background: '#fff', 
+                    border: '1px solid #e2e8f0', 
+                    borderRadius: 12, 
+                    padding: 40, 
+                    textAlign: 'center',
+                    color: '#64748b'
+                  }}>
+                    <p>No documents yet. <button onClick={() => setActiveTab('create')} style={{ background: 'none', border: 'none', color: '#1e3a5f', fontWeight: 600, cursor: 'pointer' }}>Create one to get started →</button></p>
+                  </div>
+                )}
 
-              {docsLoading ? (
-                <p style={styles.subtext}>Loading documents...</p>
-              ) : documents.length === 0 ? (
-                <p style={styles.subtext}>No saved documents yet.</p>
-              ) : (
-                <div style={styles.docList}>
-                  {documents.map((doc) => (
-                    <div key={doc._id} style={styles.docCard}>
-                      <div>
-                        <h4 style={{ margin: 0, color: '#1e3a5f' }}>{doc.title}</h4>
-                        <p style={{ margin: '6px 0 0', color: '#64748b' }}>{doc.type}</p>
-                      </div>
-
-                      <div style={styles.docActions}>
-                        <button style={styles.smallBtn} onClick={() => handleOpenDocument(doc)}>
-                          Open
-                        </button>
-                        <button style={styles.deleteBtn} onClick={() => handleDeleteDocument(doc._id)}>
+                {!loadingDocuments && documents.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 16 }}>
+                    {documents.map((doc) => (
+                      <div key={doc.id} style={{ 
+                        background: '#fff', 
+                        border: '1px solid #e2e8f0', 
+                        borderRadius: 10, 
+                        padding: 16,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                        boxShadow: '0 1px 3px #0001'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 12px #0004'}
+                      onMouseLeave={(e) => e.currentTarget.style.boxShadow = '0 1px 3px #0001'}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 14, marginBottom: 4 }}>{doc.title}</div>
+                          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Type: {doc.type}</div>
+                          <div style={{ fontSize: 12, color: '#94a3b8' }}>Saved: {doc.savedAt}</div>
+                        </div>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Delete document logic here
+                            const updated = documents.filter(d => d.id !== doc.id);
+                            localStorage.setItem('adaptdoc_documents', JSON.stringify(updated));
+                            setDocuments(updated);
+                          }}
+                          style={{ 
+                            marginTop: 12,
+                            background: '#fef2f2', 
+                            border: '1px solid #fee2e2', 
+                            borderRadius: 6, 
+                            padding: '6px 12px', 
+                            cursor: 'pointer', 
+                            fontSize: 12, 
+                            color: '#dc2626',
+                            fontWeight: 500
+                          }}
+                        >
                           Delete
                         </button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {activeTab === 'settings' && (
-            <div style={styles.documentsWrap}>
-              <h2 style={styles.heading}>Settings</h2>
-              <p style={styles.subtext}>Account settings and preferences.</p>
+            <div style={{ padding: 40, overflow: 'auto', flex: 1 }}>
+              <div style={{ maxWidth: 600 }}>
+                <h2 style={{ color: '#1e3a5f', marginBottom: 8, fontSize: 24, fontWeight: 700 }}>Settings</h2>
+                
+                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24, marginBottom: 16 }}>
+                  <h3 style={{ color: '#1e3a5f', marginBottom: 16, fontWeight: 600 }}>Account Information</h3>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 4, color: '#475569', fontWeight: 500, fontSize: 14 }}>Name</label>
+                    <input 
+                      type="text" 
+                      value={user?.name || user?.email || 'User'}
+                      readOnly
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 14 }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 4, color: '#475569', fontWeight: 500, fontSize: 14 }}>Email</label>
+                    <input 
+                      type="email" 
+                      value={user?.email || ''}
+                      readOnly
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 14 }}
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    logoutUser();
+                    navigate('/login');
+                  }}
+                  style={{ 
+                    background: '#dc2626', 
+                    color: '#fff', 
+                    border: 'none', 
+                    borderRadius: 8, 
+                    padding: '10px 20px', 
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: 14
+                  }}
+                >
+                  Logout
+                </button>
+              </div>
             </div>
           )}
         </div>

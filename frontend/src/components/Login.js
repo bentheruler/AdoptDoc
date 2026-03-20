@@ -42,17 +42,20 @@ const Login = () => {
       // Call login API
       const response = await login(formData);
       
-      // Assuming response contains { token, user }
-      const { accessToken, user } = response.data;
-      
+      // Support backend responses using either `accessToken` or `token`
+      const { accessToken, token, user } = response.data;
+      const authToken = accessToken || token;
+
       // Save to context and localStorage
-      //loginUser(user, token);
-      loginUser(user || { email: formData.email }, accessToken);
+      loginUser(user || { email: formData.email }, authToken);
       
       // Redirect to dashboard
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.');
+      console.error('Login error', err);
+      setError(
+        err.response?.data?.message || err.message || 'Login failed. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
