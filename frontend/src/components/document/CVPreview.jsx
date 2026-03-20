@@ -18,15 +18,36 @@ const buildOps = (data, onDataChange) => ({
 
 // ── CVPreview dispatcher ─────────────────────────────────────
 const CVPreview = ({ data, onDataChange, theme, fontSize, accentColor, editMode }) => {
-  const accent = accentColor || '#1e3a5f';
-  const fz     = parseInt(fontSize) || 12;
-  const ops    = buildOps(data, onDataChange);
-  const props  = { data, ...ops, accent, fz, editMode };
+  const normalizedData = {
+    ...data,
+    skills: Array.isArray(data?.skills)
+      ? data.skills
+      : typeof data?.skills === 'string'
+      ? data.skills.split(',').map((s) => s.trim()).filter(Boolean)
+      : [],
+    experience: Array.isArray(data?.experience)
+      ? data.experience
+      : typeof data?.experience === 'string'
+      ? [
+          {
+            company: '',
+            period: '',
+            role: data.experience,
+            bullets: []
+          }
+        ]
+      : []
+  };
 
-  if (theme === 'Classic') return <ClassicCV  {...props} />;
-  if (theme === 'Minimal') return <MinimalCV  {...props} />;
-  if (theme === 'Bold')    return <BoldCV     {...props} />;
-  return                          <ModernCV   {...props} />;
+  const accent = accentColor || '#1e3a5f';
+  const fz = parseInt(fontSize) || 12;
+  const ops = buildOps(normalizedData, onDataChange);
+  const props = { data: normalizedData, ...ops, accent, fz, editMode };
+
+  if (theme === 'Classic') return <ClassicCV {...props} />;
+  if (theme === 'Minimal') return <MinimalCV {...props} />;
+  if (theme === 'Bold') return <BoldCV {...props} />;
+  return <ModernCV {...props} />;
 };
 
 export default CVPreview;
@@ -78,6 +99,33 @@ function ModernCV({ data, update, updateExp, updateBullet, updateSkill, addSkill
           <div style={{ border: eb, borderRadius: 4 }}>
             <EditableField value={data.summary} onChange={(v) => update('summary', v)} editMode={editMode} multiline style={{ fontSize: fz * 0.88, color: '#444', lineHeight: 1.6 }} />
           </div>
+
+          <Section label="Education" accent={accent} fz={fz}>
+  <div style={{ border: eb, borderRadius: 4 }}>
+    {Array.isArray(data.education) && data.education.length > 0 ? (
+      data.education.map((edu, i) => (
+        <div key={i} style={{ marginBottom: 8, color: '#444', fontSize: fz * 0.88 }}>
+          <EditableField
+            value={typeof edu === 'string' ? edu : ''}
+            onChange={(v) => {
+              const updatedEducation = data.education.map((x, idx) =>
+                idx === i ? v : x
+              );
+              update('education', updatedEducation);
+            }}
+            editMode={editMode}
+            style={{ fontSize: fz * 0.88, color: '#444', lineHeight: 1.6 }}
+          />
+        </div>
+      ))
+    ) : (
+      <div style={{ color: '#64748b', fontSize: fz * 0.85 }}>
+        No education added.
+      </div>
+    )}
+  </div>
+</Section>
+
         </Section>
         <Section label="Experience" accent={accent} fz={fz}>
           {data.experience.map((exp, i) => (
