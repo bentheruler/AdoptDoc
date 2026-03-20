@@ -9,15 +9,94 @@ class PromptService {
    * @param {Object} userData - User input data.
    * @returns {string} - The constructed prompt.
    */
-  getResumePrompt(userData) {
-    return `
-Generate a complete and detailed professional CV, including sections like contact information, work experience, education, skills, and projects, using the following user data:
+getResumePrompt(userData) {
+  return `
+Generate a complete, detailed, and professional CV using the user data below.
+
+USER DATA:
 ${JSON.stringify(userData, null, 2)}
 
-Return ONLY a valid JSON object that strictly follows the JSON Resume schema (https://jsonresume.org/schema). Do not include any explanation or markdown.
-    `.trim();
-  }
+Follow this exact CV structure:
 
+1. basics
+- name
+- phone
+- email
+- linkedin
+- title
+- location
+- summary
+
+2. work
+- reverse chronological order
+- each work item must contain:
+  - role
+  - company
+  - period
+  - bullets (array of at least 3 concise achievement/responsibility statements)
+
+3. education
+- most recent first
+- each education item must contain:
+  - degree
+  - institution
+  - graduationDate
+
+4. skills
+- array of relevant technical and professional skills
+
+5. projects
+- optional array of project names or short project descriptions
+
+6. certifications
+- optional array of certifications
+
+7. references
+- string, default to "Available upon request"
+
+Rules:
+- Do not include birth date or marital status.
+- The summary must be 3 to 4 lines.
+- The CV must be realistic, detailed, and professionally written.
+- Include projects and certifications only if relevant or inferable from the input.
+- Return ONLY valid JSON.
+- Do not return markdown.
+- Do not return explanations.
+
+Return JSON in this exact format:
+
+{
+  "basics": {
+    "name": "",
+    "phone": "",
+    "email": "",
+    "linkedin": "",
+    "title": "",
+    "location": "",
+    "summary": ""
+  },
+  "work": [
+    {
+      "role": "",
+      "company": "",
+      "period": "",
+      "bullets": ["", "", ""]
+    }
+  ],
+  "education": [
+    {
+      "degree": "",
+      "institution": "",
+      "graduationDate": ""
+    }
+  ],
+  "skills": ["", ""],
+  "projects": ["", ""],
+  "certifications": ["", ""],
+  "references": "Available upon request"
+}
+  `.trim();
+}
   /**
    * Constructs a prompt for generating a Cover Letter.
    * @param {Object} userData - User input data.
