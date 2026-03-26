@@ -1,28 +1,19 @@
 const express = require("express");
-
 const router = express.Router();
 
-const auth = require("../middleware/authMiddleware");
-
+const authMiddleware = require("../middleware/authMiddleware");
 const {
   createDocument,
   getDocuments,
-  getDocument,
+  getDocumentById,
   updateDocument,
-  deleteDocument
-} = require("../controllers/documentController");
+  deleteDocument,
+} = require("../controllers/documentController.js");
 
-
-
-router.post("/",auth,createDocument);
-
-router.get("/",auth,getDocuments);
-
-router.get("/:id",auth,getDocument);
-
-router.put("/:id",auth,updateDocument);
-
-router.delete("/:id",auth,deleteDocument);
-
+router.post("/", authMiddleware, createDocument);
+router.get("/", authMiddleware, getDocuments);
+router.get("/:id", authMiddleware, getDocumentById);
+router.put("/:id", authMiddleware, updateDocument);
+router.delete("/:id", authMiddleware, deleteDocument);
 
 module.exports = router;

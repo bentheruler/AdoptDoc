@@ -22,7 +22,7 @@ app.get('/', (req, res) => {
   res.send("API Running...");
 });
 
-app.use("/api/documents", require("./routes/documents"));
+app.use("/api/documents", require("./routes/documents.js"));
 
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI;

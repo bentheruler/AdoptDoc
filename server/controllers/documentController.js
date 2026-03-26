@@ -1,52 +1,119 @@
-const resumeRenderService = require('../services/resumeRenderService');
-// const Document = require('../models/Document'); // Placeholder for when model is ready
+const Document = require("../models/Document");
 
-/**
- * @controller DocumentController
- * @description Handles document-related operations including preview and download.
- */
-class DocumentController {
-  /**
-   * Generates a preview HTML for a document.
-   * GET /api/documents/:id/preview
-   */
-  async getPreview(req, res) {
-    const { id } = req.params;
-    const { theme = 'classic' } = req.query;
+// CREATE
+const createDocument = async (req, res) => {
+  try {
+    const { title, type, content } = req.body;
 
-    try {
-      // In a real scenario, we'd fetch from DB:
-      // const doc = await Document.findById(id);
-      // if (!doc) return res.status(404).json({ error: "Document not found" });
-      
-      // Mock data for school project demonstration:
-      const mockContent = {
-        cv: { basics: { name: "Samuel Waweru", summary: "Software Engineering Student" } },
-        coverletter: { body: "This is a mock cover letter body from the API." },
-        proposal: { title: "School Project Proposal", objective: "Build an AI document generator." }
-      };
-
-      // For testing, we'll assume the ID tells us the doc type or just use CV
-      const docType = id.includes('letter') ? 'coverletter' : id.includes('prop') ? 'proposal' : 'cv';
-      const content = mockContent[docType];
-
-      const html = resumeRenderService.renderDocument(docType, content, theme);
-      return res.send(html);
-
-    } catch (error) {
-      console.error("Document Preview Error:", error.message);
-      return res.status(500).send(`<h1>Preview Error</h1><p>${error.message}</p>`);
+    if (!title || !type || !content) {
+      return res.status(400).json({
+        error: "title, type, and content are required",
+      });
     }
-  }
 
-  /**
-   * Generates a PDF download for a document.
-   * GET /api/documents/:id/download
-   */
-  async downloadPDF(req, res) {
-    // This will use pdfService once fully implemented
-    return res.status(501).json({ message: "PDF generation is still in development." });
-  }
-}
+    const document = await Document.create({
+      user: req.user.id,
+      title,
+      type,
+      content,
+    });
 
-module.exports = new DocumentController();
+    res.status(201).json(document);
+  } catch (error) {
+    console.error("Create document error:", error);
+    res.status(500).json({ error: "Failed to create document" });
+  }
+};
+
+// GET ALL FOR LOGGED-IN USER
+const getDocuments = async (req, res) => {
+  try {
+    const documents = await Document.find({ user: req.user.id }).sort({
+      createdAt: -1,
+    });
+
+    res.json(documents);
+  } catch (error) {
+    console.error("Get documents error:", error);
+    res.status(500).json({ error: "Failed to fetch documents" });
+  }
+};
+
+// GET ONE
+const getDocumentById = async (req, res) => {
+  try {
+    const document = await Document.findOne({
+      _id: req.params.id,
+      user: req.user.id,
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    res.json(document);
+  } catch (error) {
+    console.error("Get document error:", error);
+    res.status(500).json({ error: "Failed to fetch document" });
+  }
+};
+
+// UPDATE
+const updateDocument = async (req, res) => {
+  try {
+    const { title, type, content } = req.body;
+
+    const document = await Document.findOne({
+      _id: req.params.id,
+      user: req.user.id,
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    // Save previous version to history
+    document.history.push({
+      content: document.content,
+      updatedAt: new Date(),
+    });
+
+    if (title) document.title = title;
+    if (type) document.type = type;
+    if (content) document.content = content;
+
+    await document.save();
+
+    res.json(document);
+  } catch (error) {
+    console.error("Update document error:", error);
+    res.status(500).json({ error: "Failed to update document" });
+  }
+};
+
+// DELETE
+const deleteDocument = async (req, res) => {
+  try {
+    const document = await Document.findOneAndDelete({
+      _id: req.params.id,
+      user: req.user.id,
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    res.json({ success: true, message: "Document deleted successfully" });
+  } catch (error) {
+    console.error("Delete document error:", error);
+    res.status(500).json({ error: "Failed to delete document" });
+  }
+};
+
+module.exports = {
+  createDocument,
+  getDocuments,
+  getDocumentById,
+  updateDocument,
+  deleteDocument,
+};
