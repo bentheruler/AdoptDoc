@@ -1,16 +1,16 @@
 /**
  * @service promptService
  * @description Constructs dynamic prompts for document generation.
- * This service ensures that the AI's response is structured as a valid JSON object.
+ * Ensures AI returns structured valid JSON for all document types.
  */
 class PromptService {
   /**
-   * Constructs a prompt for generating a CV/Resume.
-   * @param {Object} userData - User input data.
-   * @returns {string} - The constructed prompt.
+   * CV / Resume prompt
+   * @param {Object} userData
+   * @returns {string}
    */
-getResumePrompt(userData) {
-  return `
+  getResumePrompt(userData) {
+    return `
 Generate a complete, detailed, and professional CV using the user data below.
 
 USER DATA:
@@ -64,7 +64,6 @@ Rules:
 - Do not return explanations.
 
 Return JSON in this exact format:
-
 {
   "basics": {
     "name": "",
@@ -95,38 +94,176 @@ Return JSON in this exact format:
   "certifications": ["", ""],
   "references": "Available upon request"
 }
-  `.trim();
-}
-  /**
-   * Constructs a prompt for generating a Cover Letter.
-   * @param {Object} userData - User input data.
-   * @param {string} jobDescription - Target job description.
-   * @returns {string} - The constructed prompt.
-   */
-  getCoverLetterPrompt(userData, jobDescription) {
-    return `
-Generate a complete and detailed professional cover letter, including date, recipient details, subject, salutation, a comprehensive body, closing, and signature, using the following user data and job description:
-User Data: ${JSON.stringify(userData, null, 2)}
-Job Description: ${jobDescription}
-
-The cover letter should be tailored to the specific job description and formatted as a JSON object with fields like 'date', 'recipient', 'subject', 'salutation', 'body', 'closing', and 'signature'.
-Return ONLY a valid JSON object. Do not include any explanation or markdown.
     `.trim();
   }
 
   /**
-   * Constructs a prompt for generating a Project Proposal.
-   * @param {Object} proposalData - Project details.
-   * @returns {string} - The constructed prompt.
+   * Cover Letter prompt
+   * @param {Object} userData
+   * @param {string} jobDescription
+   * @returns {string}
+   */
+  getCoverLetterPrompt(userData, jobDescription = '') {
+    return `
+Generate a complete, detailed, and professional cover letter using the user data below.
+
+USER DATA:
+${JSON.stringify(userData, null, 2)}
+
+JOB DESCRIPTION:
+${jobDescription || 'Not provided'}
+
+The cover letter must be tailored to the role if a job description is provided.
+
+Use this exact structure:
+
+- senderName
+- senderTitle
+- senderLocation
+- senderEmail
+- date
+- recipientName
+- recipientTitle
+- companyName
+- companyLocation
+- subject
+- opening
+- body1
+- body2
+- body3
+- closing
+- signoff
+- signature
+
+Rules:
+- Keep the tone professional, polished, and realistic.
+- opening should introduce the role and candidate interest.
+- body1 should explain relevant qualifications and strengths.
+- body2 should connect the user's experience/skills to the employer's needs.
+- body3 should reinforce fit and enthusiasm.
+- closing should include a polite call to action.
+- signoff should be something like "Sincerely," or "Kind regards,".
+- signature should normally match senderName.
+- If recipient details are missing, infer professional placeholders like Hiring Manager.
+- Return ONLY valid JSON.
+- Do not return markdown.
+- Do not return explanations.
+
+Return JSON in this exact format:
+{
+  "senderName": "",
+  "senderTitle": "",
+  "senderLocation": "",
+  "senderEmail": "",
+  "date": "",
+  "recipientName": "",
+  "recipientTitle": "",
+  "companyName": "",
+  "companyLocation": "",
+  "subject": "",
+  "opening": "",
+  "body1": "",
+  "body2": "",
+  "body3": "",
+  "closing": "",
+  "signoff": "",
+  "signature": ""
+}
+    `.trim();
+  }
+
+  /**
+   * Business / Project Proposal prompt
+   * @param {Object} proposalData
+   * @returns {string}
    */
   getProposalPrompt(proposalData) {
     return `
-Generate a complete and detailed professional project proposal, including sections like title, executive summary, objective, methodology, timeline, budget, and conclusion, based on the following details:
+Generate a complete, detailed, and professional business/project proposal using the details below.
+
+PROPOSAL DATA:
 ${JSON.stringify(proposalData, null, 2)}
 
-The proposal should be formatted as a JSON object with fields like 'title', 'objective', 'methodology', 'budget', 'timeline', and 'conclusion'.
-Return ONLY a valid JSON object. Do not include any explanation or markdown.
+Use this exact structure:
+
+- title
+- subtitle
+- preparedBy
+- preparedFor
+- date
+- version
+- executiveSummary
+- problemStatement
+- proposedSolution
+- deliverables (array of strings)
+- timeline (array of objects with phase, duration, desc)
+- budget
+- validity
+- closingNote
+- contactName
+- contactEmail
+
+Rules:
+- Make the proposal realistic, clear, and professional.
+- executiveSummary should be concise but persuasive.
+- problemStatement should explain the issue or need.
+- proposedSolution should clearly explain the recommended approach.
+- deliverables must be a string array.
+- timeline must be an array of objects with:
+  - phase
+  - duration
+  - desc
+- budget should be professionally phrased even if exact numbers are not provided.
+- validity should indicate how long the proposal remains valid.
+- closingNote should end with a strong professional closing statement.
+- Return ONLY valid JSON.
+- Do not return markdown.
+- Do not return explanations.
+
+Return JSON in this exact format:
+{
+  "title": "",
+  "subtitle": "",
+  "preparedBy": "",
+  "preparedFor": "",
+  "date": "",
+  "version": "",
+  "executiveSummary": "",
+  "problemStatement": "",
+  "proposedSolution": "",
+  "deliverables": ["", ""],
+  "timeline": [
+    {
+      "phase": "",
+      "duration": "",
+      "desc": ""
+    }
+  ],
+  "budget": "",
+  "validity": "",
+  "closingNote": "",
+  "contactName": "",
+  "contactEmail": ""
+}
     `.trim();
+  }
+
+  /**
+   * Unified prompt getter
+   * @param {string} docType
+   * @param {Object} userData
+   * @returns {string}
+   */
+  getPrompt(docType, userData) {
+    switch (docType) {
+      case 'cover_letter':
+        return this.getCoverLetterPrompt(userData, userData?.jobDescription || '');
+      case 'business_proposal':
+        return this.getProposalPrompt(userData);
+      case 'cv':
+      default:
+        return this.getResumePrompt(userData);
+    }
   }
 }
 

@@ -1,119 +1,121 @@
-const Document = require("../models/Document");
+const Document = require('../../models/Document');
 
-// CREATE
-const createDocument = async (req, res) => {
+
+
+// CREATE DOCUMENT
+exports.createDocument = async (req,res) => {
+
   try {
-    const { title, type, content } = req.body;
 
-    if (!title || !type || !content) {
-      return res.status(400).json({
-        error: "title, type, and content are required",
-      });
-    }
-
-    const document = await Document.create({
+    const document = new Document({
       user: req.user.id,
-      title,
-      type,
-      content,
+      type: req.body.type,
+      title: req.body.title,
+      content: req.body.content
     });
-
-    res.status(201).json(document);
-  } catch (error) {
-    console.error("Create document error:", error);
-    res.status(500).json({ error: "Failed to create document" });
-  }
-};
-
-// GET ALL FOR LOGGED-IN USER
-const getDocuments = async (req, res) => {
-  try {
-    const documents = await Document.find({ user: req.user.id }).sort({
-      createdAt: -1,
-    });
-
-    res.json(documents);
-  } catch (error) {
-    console.error("Get documents error:", error);
-    res.status(500).json({ error: "Failed to fetch documents" });
-  }
-};
-
-// GET ONE
-const getDocumentById = async (req, res) => {
-  try {
-    const document = await Document.findOne({
-      _id: req.params.id,
-      user: req.user.id,
-    });
-
-    if (!document) {
-      return res.status(404).json({ error: "Document not found" });
-    }
-
-    res.json(document);
-  } catch (error) {
-    console.error("Get document error:", error);
-    res.status(500).json({ error: "Failed to fetch document" });
-  }
-};
-
-// UPDATE
-const updateDocument = async (req, res) => {
-  try {
-    const { title, type, content } = req.body;
-
-    const document = await Document.findOne({
-      _id: req.params.id,
-      user: req.user.id,
-    });
-
-    if (!document) {
-      return res.status(404).json({ error: "Document not found" });
-    }
-
-    // Save previous version to history
-    document.history.push({
-      content: document.content,
-      updatedAt: new Date(),
-    });
-
-    if (title) document.title = title;
-    if (type) document.type = type;
-    if (content) document.content = content;
 
     await document.save();
 
-    res.json(document);
-  } catch (error) {
-    console.error("Update document error:", error);
-    res.status(500).json({ error: "Failed to update document" });
+    res.status(201).json(document);
+
+  } catch(err) {
+
+    res.status(500).json({error:err.message});
+
   }
+
 };
 
-// DELETE
-const deleteDocument = async (req, res) => {
-  try {
-    const document = await Document.findOneAndDelete({
-      _id: req.params.id,
-      user: req.user.id,
-    });
 
-    if (!document) {
-      return res.status(404).json({ error: "Document not found" });
+
+// GET USER DOCUMENTS
+exports.getDocuments = async (req,res) => {
+
+  try {
+
+    const docs = await Document.find({ user:req.user.id });
+
+    res.json(docs);
+
+  } catch(err) {
+
+    res.status(500).json({error:err.message});
+
+  }
+
+};
+
+
+
+// GET ONE DOCUMENT
+exports.getDocumentById = async (req,res) => {
+
+  try {
+
+    const doc = await Document.findById(req.params.id);
+
+    if(!doc){
+      return res.status(404).json({message:"Document not found"});
     }
 
-    res.json({ success: true, message: "Document deleted successfully" });
-  } catch (error) {
-    console.error("Delete document error:", error);
-    res.status(500).json({ error: "Failed to delete document" });
+    res.json(doc);
+
+  } catch(err){
+
+    res.status(500).json({error:err.message});
+
   }
+
 };
 
-module.exports = {
-  createDocument,
-  getDocuments,
-  getDocumentById,
-  updateDocument,
-  deleteDocument,
+
+
+// UPDATE DOCUMENT
+exports.updateDocument = async (req,res) => {
+
+  try {
+
+    const doc = await Document.findById(req.params.id);
+
+    if(!doc){
+      return res.status(404).json({message:"Document not found"});
+    }
+
+    // save history
+    doc.history.push({
+      content: doc.content
+    });
+
+    doc.content = req.body.content;
+    doc.title = req.body.title;
+
+    await doc.save();
+
+    res.json(doc);
+
+  } catch(err){
+
+    res.status(500).json({error:err.message});
+
+  }
+
+};
+
+
+
+// DELETE DOCUMENT
+exports.deleteDocument = async (req,res) => {
+
+  try {
+
+    await Document.findByIdAndDelete(req.params.id);
+
+    res.json({message:"Document deleted"});
+
+  } catch(err){
+
+    res.status(500).json({error:err.message});
+
+  }
+
 };

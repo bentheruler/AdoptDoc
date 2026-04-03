@@ -8,7 +8,7 @@ const {
   getDocumentById,
   updateDocument,
   deleteDocument,
-} = require("../controllers/documentController.js");
+} = require("../server/controllers/documentController.js");
 
 router.post("/", authMiddleware, createDocument);
 router.get("/", authMiddleware, getDocuments);

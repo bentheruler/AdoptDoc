@@ -14,45 +14,58 @@ class AIController {
     const { docType, userData, jobDescription } = req.body;
 
     if (!docType || !userData) {
-      return res.status(400).json({ error: "Missing required fields: docType, userData" });
+      return res.status(400).json({
+        error: 'Missing required fields: docType, userData'
+      });
     }
 
     try {
-      let prompt;
+      let normalizedDocType;
+
       switch (docType.toLowerCase()) {
         case 'cv':
         case 'resume':
-          prompt = promptService.getResumePrompt(userData);
+          normalizedDocType = 'cv';
           break;
+
         case 'coverletter':
-          prompt = promptService.getCoverLetterPrompt(userData, jobDescription || "");
+        case 'cover_letter':
+        case 'cover-letter':
+          normalizedDocType = 'cover_letter';
           break;
+
         case 'proposal':
-          prompt = promptService.getProposalPrompt(userData);
+        case 'business_proposal':
+        case 'business-proposal':
+          normalizedDocType = 'business_proposal';
           break;
+
         default:
-          return res.status(400).json({ error: `Unsupported docType: ${docType}` });
+          return res.status(400).json({
+            error: `Unsupported docType: ${docType}`
+          });
       }
 
-      // Use the FailoverManager to handle the AI generation with Gemni as primary
-      const resultRaw = await FailoverManager.generate(prompt);
+      const result = await FailoverManager.generateDocument(
+        normalizedDocType,
+        {
+          ...userData,
+          jobDescription: jobDescription || ''
+        }
+      );
 
-      // Attempt to parse the AI output as JSON
-      try {
-        const resultJson = JSON.parse(resultRaw.replace(/```json|```/g, '').trim());
-        return res.json({ success: true, content: resultJson });
-      } catch (parseError) {
-        console.error("AI JSON Parse Error:", parseError.message);
-        return res.json({ 
-          success: true, 
-          content: resultRaw, 
-          warning: "AI response was not a valid JSON. Check raw text." 
-        });
-      }
+      return res.json({
+        success: true,
+        documentType: result.documentType,
+        content: result.content,
+        provider: result.provider
+      });
 
     } catch (error) {
-      console.error("AI Generation Endpoint Error:", error.message);
-      return res.status(500).json({ error: error.message });
+      console.error('AI Generation Endpoint Error:', error.message);
+      return res.status(500).json({
+        error: error.message
+      });
     }
   }
 }
