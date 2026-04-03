@@ -1,32 +1,29 @@
-// client/src/App.jsx
-// Main application component.
-
 import React from "react";
-
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 import Login from "./components/Login";
 import Register from "./components/Register";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 import Dashboard from "./pages/dashboard/DashboardPage";
-
-import ProtectedRoute from "./components/ProtectedRoute";
+import VerifyEmail from "./pages/auth/VerifyEmail";
+import ForgotPassword from "./pages/auth/ForgotPassword";
+import ResetPassword from "./pages/auth/ResetPassword";
 
 import "./App.css";
 
 function AppRoutes() {
-
   const { user } = useAuth();
 
   return (
-
     <Routes>
-
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/verify-email/:token" element={<VerifyEmail />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password/:token" element={<ResetPassword />} />
 
       {/* Protected route */}
       <Route
@@ -46,8 +43,14 @@ function AppRoutes() {
         }
       />
 
+      {/* Fallback */}
+      <Route
+        path="*"
+        element={
+          user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
+        }
+      />
     </Routes>
-
   );
 }
 

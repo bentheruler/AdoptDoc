@@ -2,62 +2,149 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { login } from '../utils/api';
-import './Auth.css'; // We'll create this next
+import axios from 'axios';
+import './Auth.css';
 
 const Login = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
-  const [error, setError] = useState('');
+
+  const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
-  
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [showResendVerification, setShowResendVerification] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+  const [resendingVerification, setResendingVerification] = useState(false);
+
   const navigate = useNavigate();
   const { loginUser } = useAuth();
 
-  // Handle input changes
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-    // Clear error when user starts typing
-    setError('');
+  const validateEmail = (email) => {
+    const trimmed = email.trim();
+    if (!trimmed) return 'Email is required';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) return 'Please enter a valid email address';
+    return '';
   };
 
-  // Handle form submission
+  const validatePassword = (password) => {
+    if (!password) return 'Password is required';
+    if (password.length < 8) return 'Password must be at least 8 characters';
+    return '';
+  };
+
+  const validateField = (name, value) => {
+    switch (name) {
+      case 'email':
+        return validateEmail(value);
+      case 'password':
+        return validatePassword(value);
+      default:
+        return '';
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {
+      email: validateEmail(formData.email),
+      password: validatePassword(formData.password),
+    };
+
+    setErrors(newErrors);
+    return !Object.values(newErrors).some(Boolean);
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    setServerError('');
+    setResendMessage('');
+    setShowResendVerification(false);
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: validateField(name, value),
+    }));
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: validateField(name, value),
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Basic validation
-    if (!formData.email || !formData.password) {
-      setError('Please fill in all fields');
-      return;
-    }
+
+    if (!validateForm()) return;
 
     setLoading(true);
-    setError('');
+    setServerError('');
+    setResendMessage('');
+    setShowResendVerification(false);
 
     try {
-      // Call login API
-      const response = await login(formData);
-      
-      // Support backend responses using either `accessToken` or `token`
+      const payload = {
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+      };
+
+      const response = await login(payload);
       const { accessToken, token, user } = response.data;
       const authToken = accessToken || token;
 
-      // Save to context and localStorage
-      loginUser(user || { email: formData.email }, authToken);
-      
-      // Redirect to dashboard
+      loginUser(user || { email: payload.email }, authToken);
       navigate('/dashboard');
     } catch (err) {
       console.error('Login error', err);
-      setError(
-        err.response?.data?.message || err.message || 'Login failed. Please try again.'
-      );
+
+      const message =
+        err.response?.data?.message ||
+        err.message ||
+        'Login failed. Please try again.';
+
+      setServerError(message);
+
+      if (message.toLowerCase().includes('verify your email')) {
+        setShowResendVerification(true);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      setResendingVerification(true);
+      setResendMessage('');
+
+      const email = formData.email.trim().toLowerCase();
+
+      if (!email) {
+        setResendMessage('Enter your email first.');
+        return;
+      }
+
+      const res = await axios.post('/api/auth/resend-verification', { email });
+      setResendMessage(res.data.message || 'Verification email sent.');
+    } catch (err) {
+      setResendMessage(
+        err.response?.data?.message || 'Could not resend verification email.'
+      );
+    } finally {
+      setResendingVerification(false);
     }
   };
 
@@ -66,10 +153,11 @@ const Login = () => {
       <div className="auth-card">
         <h2>Welcome Back</h2>
         <p>Log in to your AdoptDoc account</p>
-        
-        {error && <div className="error-message">{error}</div>}
-        
-        <form onSubmit={handleSubmit}>
+
+        {serverError && <div className="error-message">{serverError}</div>}
+        {resendMessage && <div className="success-message">{resendMessage}</div>}
+
+        <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
             <label htmlFor="email">Email</label>
             <input
@@ -78,26 +166,49 @@ const Login = () => {
               name="email"
               value={formData.email}
               onChange={handleChange}
+              onBlur={handleBlur}
               placeholder="Enter your email"
               disabled={loading}
             />
+            {errors.email && <small className="error-text">{errors.email}</small>}
           </div>
 
           <div className="form-group">
             <label htmlFor="password">Password</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Enter your password"
-              disabled={loading}
-            />
+
+            <div className="password-wrapper">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                placeholder="Enter your password"
+                disabled={loading}
+              />
+
+              <button
+                type="button"
+                className="toggle-password"
+                onClick={() => setShowPassword((prev) => !prev)}
+                disabled={loading}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+
+            {errors.password && <small className="error-text">{errors.password}</small>}
           </div>
 
-          <button 
-            type="submit" 
+          <div className="auth-links-row">
+            <Link to="/forgot-password" className="auth-inline-link">
+              Forgot password?
+            </Link>
+          </div>
+
+          <button
+            type="submit"
             className="auth-button"
             disabled={loading}
           >
@@ -105,8 +216,24 @@ const Login = () => {
           </button>
         </form>
 
+        {showResendVerification && (
+          <div className="verification-box">
+            <p className="verification-text">
+              Your email is not verified yet.
+            </p>
+            <button
+              type="button"
+              className="secondary-auth-button"
+              onClick={handleResendVerification}
+              disabled={resendingVerification}
+            >
+              {resendingVerification ? 'Sending...' : 'Resend Verification Email'}
+            </button>
+          </div>
+        )}
+
         <p className="auth-footer">
-          Don't have an account? <Link to="/register">Sign up</Link>
+          Don&apos;t have an account? <Link to="/register">Sign up</Link>
         </p>
       </div>
     </div>

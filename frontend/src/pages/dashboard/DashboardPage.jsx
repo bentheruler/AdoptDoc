@@ -18,9 +18,9 @@ import ProposalPreview from '../../components/document/ProposalPreview';
 
 import HomeTab from '../../pages/dashboard/HomeTab';
 
-import { DEFAULT_CV, DEFAULT_COVER_LETTER, DEFAULT_PROPOSAL } from '../../constants';
 import { generateDocumentAI } from '../../services/aiService';
 
+/* ─── PDF lib loader ─── */
 async function loadPdfLibs() {
   const load = (src) =>
     new Promise((res, rej) => {
@@ -34,7 +34,6 @@ async function loadPdfLibs() {
   if (!window.html2canvas) {
     await load('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
   }
-
   if (!window.jspdf) {
     await load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
   }
@@ -49,67 +48,295 @@ const safe = (val) => {
   return String(val);
 };
 
-const mapAICvToPreview = (content) => {
-  return {
-    name: safe(content?.basics?.name),
-    phone: safe(content?.basics?.phone),
-    email1: safe(content?.basics?.email),
-    email2: safe(content?.basics?.email2),
-    linkedin: safe(content?.basics?.linkedin),
-    title: safe(content?.basics?.title || content?.basics?.role || content?.basics?.headline),
-    location: safe(
-      content?.basics?.location ||
-        content?.basics?.address ||
-        content?.basics?.city
-    ),
-    summary: safe(content?.basics?.summary),
+const mapAICvToPreview = (content) => ({
+  name: safe(content?.basics?.name),
+  phone: safe(content?.basics?.phone),
+  email1: safe(content?.basics?.email),
+  email2: safe(content?.basics?.email2),
+  linkedin: safe(content?.basics?.linkedin),
+  title: safe(content?.basics?.title || content?.basics?.role || content?.basics?.headline),
+  location: safe(content?.basics?.location || content?.basics?.address || content?.basics?.city),
+  summary: safe(content?.basics?.summary),
+  skills: Array.isArray(content?.skills) ? content.skills.map(safe).filter(Boolean) : [],
+  education: Array.isArray(content?.education)
+    ? content.education
+        .map((edu) =>
+          typeof edu === 'string'
+            ? edu
+            : [
+                safe(edu.degree),
+                safe(edu.institution || edu.school || edu.university),
+                safe(edu.date || edu.year || edu.graduationDate),
+              ]
+                .filter(Boolean)
+                .join(' - ')
+        )
+        .filter(Boolean)
+    : [],
+  experience: Array.isArray(content?.work)
+    ? content.work.map((job) => ({
+        company: safe(job.company),
+        period: safe(job.period || job.duration || job.dates),
+        role: safe(job.role || job.position || job.jobTitle),
+        bullets: Array.isArray(job.bullets)
+          ? job.bullets.map(safe).filter(Boolean)
+          : Array.isArray(job.achievements)
+          ? job.achievements.map(safe).filter(Boolean)
+          : job.description
+          ? [safe(job.description)]
+          : [],
+      }))
+    : [],
+  projects: Array.isArray(content?.projects) ? content.projects.map(safe).filter(Boolean) : [],
+  certifications: Array.isArray(content?.certifications) ? content.certifications.map(safe).filter(Boolean) : [],
+  references: safe(content?.references) || 'Available upon request',
+});
 
-    skills: Array.isArray(content?.skills)
-      ? content.skills.map((s) => safe(s)).filter(Boolean)
-      : [],
-
-    education: Array.isArray(content?.education)
-      ? content.education
-          .map((edu) => {
-            if (typeof edu === 'string') return edu;
-            return [
-              safe(edu.degree),
-              safe(edu.institution || edu.school || edu.university),
-              safe(edu.date || edu.year || edu.graduationDate)
-            ]
-              .filter(Boolean)
-              .join(' - ');
-          })
-          .filter(Boolean)
-      : [],
-
-    experience: Array.isArray(content?.work)
-      ? content.work.map((job) => ({
-          company: safe(job.company),
-          period: safe(job.period || job.duration || job.dates),
-          role: safe(job.role || job.position || job.jobTitle),
-          bullets: Array.isArray(job.bullets)
-            ? job.bullets.map((b) => safe(b)).filter(Boolean)
-            : Array.isArray(job.achievements)
-            ? job.achievements.map((a) => safe(a)).filter(Boolean)
-            : job.description
-            ? [safe(job.description)]
-            : []
-        }))
-      : [],
-
-    projects: Array.isArray(content?.projects)
-      ? content.projects.map((p) => safe(p)).filter(Boolean)
-      : [],
-
-    certifications: Array.isArray(content?.certifications)
-      ? content.certifications.map((c) => safe(c)).filter(Boolean)
-      : [],
-
-    references: safe(content?.references) || 'Available upon request'
-  };
+/* ══════════════════════════════════════════════════
+   FIELD CATALOGUE
+══════════════════════════════════════════════════ */
+const FIELD_CATALOGUE = {
+  cv: [
+    { key: 'name', label: 'Full Name', icon: '👤', placeholder: 'e.g. Jane Doe', type: 'input', core: true },
+    { key: 'email1', label: 'Email', icon: '📧', placeholder: 'jane@example.com', type: 'input', core: true },
+    { key: 'phone', label: 'Phone', icon: '📞', placeholder: '+254 700 000 000', type: 'input', core: false },
+    { key: 'linkedin', label: 'LinkedIn', icon: '🔗', placeholder: 'linkedin.com/in/janedoe', type: 'input', core: false },
+    { key: 'title', label: 'Job Title', icon: '💼', placeholder: 'e.g. Senior Designer', type: 'input', core: false },
+    { key: 'location', label: 'Location', icon: '📍', placeholder: 'e.g. Nairobi, Kenya', type: 'input', core: false },
+    { key: 'summary', label: 'Summary', icon: '📝', placeholder: 'Professional summary…', type: 'textarea', core: false },
+    { key: 'skills', label: 'Skills', icon: '⚡', placeholder: 'React, Figma, Node.js…', type: 'tags', core: false },
+    { key: 'education', label: 'Education', icon: '🎓', placeholder: 'BSc CS - MIT - 2020', type: 'tags', core: false },
+    { key: 'experience', label: 'Experience', icon: '🏢', placeholder: 'Describe your experience…', type: 'textarea', core: false },
+    { key: 'projects', label: 'Projects', icon: '🚀', placeholder: 'Project name, description…', type: 'tags', core: false },
+    { key: 'certifications', label: 'Certifications', icon: '🏅', placeholder: 'AWS Certified, PMP…', type: 'tags', core: false },
+    { key: 'references', label: 'References', icon: '👥', placeholder: 'Available upon request', type: 'input', core: false },
+  ],
+  cover_letter: [
+    { key: 'senderName', label: 'Your Name', icon: '👤', placeholder: 'e.g. Jane Doe', type: 'input', core: true },
+    { key: 'senderEmail', label: 'Your Email', icon: '📧', placeholder: 'jane@example.com', type: 'input', core: true },
+    { key: 'senderTitle', label: 'Your Title', icon: '💼', placeholder: 'e.g. Software Engineer', type: 'input', core: false },
+    { key: 'senderLocation', label: 'Your Location', icon: '📍', placeholder: 'e.g. Nairobi, Kenya', type: 'input', core: false },
+    { key: 'companyName', label: 'Company', icon: '🏢', placeholder: 'Company applying to…', type: 'input', core: false },
+    { key: 'recipientName', label: 'Hiring Manager', icon: '🤝', placeholder: 'e.g. Hiring Manager', type: 'input', core: false },
+    { key: 'subject', label: 'Subject Line', icon: '📌', placeholder: 'Application for…', type: 'input', core: false },
+    { key: 'body1', label: 'Opening Paragraph', icon: '✍️', placeholder: 'Introduce yourself…', type: 'textarea', core: false },
+    { key: 'body2', label: 'Main Paragraph', icon: '📝', placeholder: 'Your key experience…', type: 'textarea', core: false },
+    { key: 'body3', label: 'Closing Paragraph', icon: '🎯', placeholder: 'Why this role/company…', type: 'textarea', core: false },
+    { key: 'date', label: 'Date', icon: '📅', placeholder: 'e.g. March 2026', type: 'input', core: false },
+    { key: 'signature', label: 'Signature Name', icon: '✒️', placeholder: 'Your full name', type: 'input', core: false },
+  ],
+  business_proposal: [
+    { key: 'title', label: 'Project Title', icon: '📋', placeholder: 'e.g. AI Platform Development', type: 'input', core: true },
+    { key: 'preparedFor', label: 'Prepared For', icon: '🏢', placeholder: 'Client / company name', type: 'input', core: true },
+    { key: 'preparedBy', label: 'Prepared By', icon: '👤', placeholder: 'Your name or company', type: 'input', core: false },
+    { key: 'executiveSummary', label: 'Executive Summary', icon: '📝', placeholder: 'High-level overview…', type: 'textarea', core: false },
+    { key: 'problemStatement', label: 'Problem Statement', icon: '❓', placeholder: 'Problem being solved…', type: 'textarea', core: false },
+    { key: 'proposedSolution', label: 'Proposed Solution', icon: '💡', placeholder: 'Your solution…', type: 'textarea', core: false },
+    { key: 'budget', label: 'Budget', icon: '💰', placeholder: 'e.g. KES 850,000', type: 'input', core: false },
+    { key: 'validity', label: 'Validity', icon: '📅', placeholder: 'e.g. 30 days from issue', type: 'input', core: false },
+    { key: 'closingNote', label: 'Closing Note', icon: '✒️', placeholder: 'Closing remarks…', type: 'textarea', core: false },
+    { key: 'contactName', label: 'Contact Name', icon: '🤝', placeholder: 'Your contact name', type: 'input', core: false },
+    { key: 'contactEmail', label: 'Contact Email', icon: '📧', placeholder: 'contact@example.com', type: 'input', core: false },
+  ],
 };
 
+/* ══════════════════════════════════════════════════
+   ICONS
+══════════════════════════════════════════════════ */
+const SparkleIcon = () => (
+  <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
+  </svg>
+);
+const SaveIcon = () => (
+  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <polyline points="17 21 17 13 7 13 7 21" />
+    <polyline points="7 3 7 8 15 8" />
+  </svg>
+);
+const PdfIcon = () => (
+  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="12" y1="18" x2="12" y2="12" />
+    <line x1="9" y1="15" x2="15" y2="15" />
+  </svg>
+);
+const EyeIcon = () => (
+  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+const EditIcon = () => (
+  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+/* ══════════════════════════════════════════════════
+   FIELD PICKER
+══════════════════════════════════════════════════ */
+const FieldPicker = ({ catalogue, activeKeys, onToggle }) => {
+  const optional = catalogue.filter((f) => !f.core);
+  return (
+    <div style={fp.wrap}>
+      <p style={fp.hint}>Add fields to your document</p>
+      <div style={fp.grid}>
+        {optional.map((f) => {
+          const on = activeKeys.includes(f.key);
+          return (
+            <button
+              key={f.key}
+              style={{ ...fp.chip, ...(on ? fp.on : fp.off) }}
+              onClick={() => onToggle(f.key)}
+            >
+              <span style={{ fontSize: 13 }}>{f.icon}</span>
+              <span>{f.label}</span>
+              <span style={{ ...fp.badge, ...(on ? fp.badgeOn : fp.badgeOff) }}>
+                {on ? '✓' : '+'}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const fp = {
+  wrap: { padding: '16px 20px 18px', background: '#f8fafc', borderBottom: '1px solid #edf0f4' },
+  hint: { margin: '0 0 11px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' },
+  grid: { display: 'flex', flexWrap: 'wrap', gap: 7 },
+  chip: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px 5px 8px', borderRadius: 20, border: '1.5px solid', cursor: 'pointer', fontSize: 12, fontWeight: 500, background: 'none', outline: 'none', transition: 'all 0.14s', userSelect: 'none', lineHeight: 1 },
+  on: { borderColor: '#1e3a5f', background: '#eef2f9', color: '#1e3a5f' },
+  off: { borderColor: '#e2e8f0', background: '#ffffff', color: '#64748b' },
+  badge: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', fontSize: 10, fontWeight: 700 },
+  badgeOn: { background: '#1e3a5f', color: '#fff' },
+  badgeOff: { background: '#e2e8f0', color: '#64748b' },
+};
+
+/* ══════════════════════════════════════════════════
+   FIELD ROW
+══════════════════════════════════════════════════ */
+const FieldRow = ({ field, value, onChange, onRemove }) => {
+  const isTextarea = field.type === 'textarea';
+  const isTags = field.type === 'tags';
+
+  const toRaw = (v) => (Array.isArray(v) ? v.join(', ') : v || '');
+  const [rawTags, setRawTags] = useState(() => toRaw(value));
+  const prevTagValue = useRef(value);
+
+  useEffect(() => {
+    if (isTags && prevTagValue.current !== value) {
+      setRawTags(toRaw(value));
+      prevTagValue.current = value;
+    }
+  }, [value, isTags]);
+
+  const commitTags = () => {
+    onChange(rawTags.split(',').map((s) => s.trim()).filter(Boolean));
+  };
+
+  return (
+    <div style={fr.wrap}>
+      <div style={fr.header}>
+        <label style={fr.label}>
+          <span style={{ fontSize: 14, marginRight: 7 }}>{field.icon}</span>
+          {field.label}
+          {field.core && <span style={fr.badge}>required</span>}
+        </label>
+        {!field.core && (
+          <button
+            style={fr.removeBtn}
+            onClick={onRemove}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#cbd5e1')}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {isTextarea ? (
+        <textarea
+          style={fr.textarea}
+          placeholder={field.placeholder}
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : isTags ? (
+        <>
+          <input
+            style={fr.input}
+            placeholder={field.placeholder}
+            value={rawTags}
+            onChange={(e) => setRawTags(e.target.value)}
+            onBlur={commitTags}
+          />
+          <p style={fr.hint}>Separate with commas</p>
+        </>
+      ) : (
+        <input
+          style={fr.input}
+          placeholder={field.placeholder}
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+};
+
+const fr = {
+  wrap: { padding: '13px 20px', borderBottom: '1px solid #f1f5f9' },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 },
+  label: { display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 600, color: '#334155' },
+  badge: { marginLeft: 8, fontSize: 9, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: '0.05em' },
+  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 13, padding: '2px 5px', borderRadius: 4, lineHeight: 1, transition: 'color 0.12s' },
+  input: { width: '100%', padding: '9px 13px', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color 0.15s' },
+  textarea: { width: '100%', padding: '9px 13px', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 13, color: '#0f172a', background: '#fff', outline: 'none', resize: 'vertical', minHeight: 88, boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color 0.15s' },
+  hint: { margin: '5px 0 0', fontSize: 11, color: '#94a3b8' },
+};
+
+/* ══════════════════════════════════════════════════
+   RIGHT PANEL TABS
+══════════════════════════════════════════════════ */
+const RightPanelTabs = ({ active, onChange }) => {
+  const tabs = [
+    { id: 'preview', label: 'Preview', icon: <EyeIcon /> },
+    { id: 'style', label: 'Style', icon: <EditIcon /> },
+    { id: 'templates', label: 'Templates', icon: <span style={{ fontSize: 13 }}>🎨</span> },
+  ];
+
+  return (
+    <div style={rpt.bar}>
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          style={{ ...rpt.tab, ...(active === t.id ? rpt.active : rpt.inactive) }}
+          onClick={() => onChange(t.id)}
+        >
+          {t.icon}
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
+const rpt = {
+  bar: { display: 'flex', borderBottom: '1px solid #e2e8f0', background: '#fff', padding: '0 20px', gap: 2, flexShrink: 0 },
+  tab: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '12px 14px', fontSize: 13, fontWeight: 500, border: 'none', background: 'none', cursor: 'pointer', borderBottom: '2px solid transparent', marginBottom: -1, transition: 'color 0.15s, border-color 0.15s' },
+  active: { color: '#1e3a5f', borderBottomColor: '#1e3a5f' },
+  inactive: { color: '#94a3b8' },
+};
+
+/* ══════════════════════════════════════════════════
+   MAIN DASHBOARD
+══════════════════════════════════════════════════ */
 const DashboardPage = () => {
   const { user, logoutUser } = useAuth();
   const navigate = useNavigate();
@@ -125,25 +352,79 @@ const DashboardPage = () => {
   const [theme, setTheme] = useState('Modern');
   const [fontSize, setFontSize] = useState('12 pt');
   const [accentColor, setAccentColor] = useState('#1e3a5f');
+  const [fontFamily, setFontFamily] = useState('Inter');
+  const [spacing, setSpacing] = useState('normal');
+  const [paperSize, setPaperSize] = useState('A4');
+  const [showPageNumbers, setShowPageNumbers] = useState(false);
+  const [showWatermark, setShowWatermark] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [rightTab, setRightTab] = useState('preview');
 
   const [cvData, setCvData] = useState({
-    ...DEFAULT_CV,
-    phone: DEFAULT_CV.phone || '',
-    linkedin: DEFAULT_CV.linkedin || '',
-    education: DEFAULT_CV.education || [],
-    projects: DEFAULT_CV.projects || [],
-    certifications: DEFAULT_CV.certifications || [],
-    references: DEFAULT_CV.references || 'Available upon request'
+    name: '',
+    phone: '',
+    email1: '',
+    email2: '',
+    linkedin: '',
+    title: '',
+    location: '',
+    summary: '',
+    skills: [],
+    education: [],
+    experience: [],
+    projects: [],
+    certifications: [],
+    references: '',
   });
 
-  const [coverLetterData, setCoverLetterData] = useState(DEFAULT_COVER_LETTER);
-  const [proposalData, setProposalData] = useState(DEFAULT_PROPOSAL);
+  const [coverLetterData, setCoverLetterData] = useState({
+    senderName: '',
+    senderTitle: '',
+    senderLocation: '',
+    senderEmail: '',
+    date: '',
+    recipientName: '',
+    recipientTitle: '',
+    companyName: '',
+    companyLocation: '',
+    subject: '',
+    opening: '',
+    body1: '',
+    body2: '',
+    body3: '',
+    closing: '',
+    signoff: 'Sincerely,',
+    signature: '',
+  });
 
-  const [generatedText, setGeneratedText] = useState('');
+  const [proposalData, setProposalData] = useState({
+    title: '',
+    subtitle: 'Technical Proposal',
+    preparedBy: '',
+    preparedFor: '',
+    date: '',
+    version: 'v1.0',
+    executiveSummary: '',
+    problemStatement: '',
+    proposedSolution: '',
+    deliverables: [],
+    timeline: [],
+    budget: '',
+    validity: '',
+    closingNote: '',
+    contactName: '',
+    contactEmail: '',
+  });
+
   const [aiLoading, setAiLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [wordLoading, setWordLoading] = useState(false);
+
+  const [activeFieldKeys, setActiveFieldKeys] = useState({
+    cv: [],
+    cover_letter: [],
+    business_proposal: [],
+  });
 
   const docType =
     category === 'CV'
@@ -160,13 +441,17 @@ const DashboardPage = () => {
       : proposalData;
 
   const updateField = (field, value) => {
-    if (docType === 'cv') {
-      setCvData((prev) => ({ ...prev, [field]: value }));
-    } else if (docType === 'cover_letter') {
-      setCoverLetterData((prev) => ({ ...prev, [field]: value }));
-    } else {
-      setProposalData((prev) => ({ ...prev, [field]: value }));
-    }
+    if (docType === 'cv') setCvData((p) => ({ ...p, [field]: value }));
+    else if (docType === 'cover_letter') setCoverLetterData((p) => ({ ...p, [field]: value }));
+    else setProposalData((p) => ({ ...p, [field]: value }));
+  };
+
+  const toggleField = (key) => {
+    setActiveFieldKeys((prev) => {
+      const cur = prev[docType] || [];
+      const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
+      return { ...prev, [docType]: next };
+    });
   };
 
   useEffect(() => {
@@ -174,22 +459,14 @@ const DashboardPage = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'documents') {
-      loadDocuments();
-    }
+    if (activeTab === 'documents') loadDocuments();
   }, [activeTab]);
-
-  useEffect(() => {
-    setGeneratedText('');
-  }, [category]);
 
   const loadDocuments = () => {
     try {
       setLoadingDocuments(true);
-      const saved = JSON.parse(localStorage.getItem('adaptdoc_documents') || '[]');
-      setDocuments(saved);
-    } catch (err) {
-      console.error('Failed to load documents:', err);
+      setDocuments(JSON.parse(localStorage.getItem('adaptdoc_documents') || '[]'));
+    } catch {
       setDocuments([]);
     } finally {
       setLoadingDocuments(false);
@@ -201,23 +478,25 @@ const DashboardPage = () => {
       setAiLoading(true);
 
       const res = await generateDocumentAI(docType, currentFields);
-      console.log('AI response:', res);
+      console.log('FULL AI RESPONSE:', res);
 
       if (docType === 'cv' && res.content) {
-        const mappedCv = mapAICvToPreview(res.content);
-        console.log('Mapped CV:', mappedCv);
-        setCvData((prev) => ({ ...prev, ...mappedCv }));
-        setGeneratedText('');
+        setCvData((p) => ({ ...p, ...mapAICvToPreview(res.content) }));
+      } else if (docType === 'cover_letter' && res.content) {
+        setCoverLetterData((p) => ({
+          ...p,
+          ...res.content,
+        }));
+      } else if (docType === 'business_proposal' && res.content) {
+        setProposalData((p) => ({
+          ...p,
+          ...res.content,
+        }));
       } else {
-        const generated =
-          res.document ||
-          res.generatedText ||
-          res.message ||
-          '';
-        setGeneratedText(generated);
+        alert('AI returned no usable document content.');
       }
     } catch (error) {
-      console.error('AI generation error:', error.response?.data || error.message);
+      console.error('AI generation error:', error.response?.data || error.message || error);
       alert(error.response?.data?.error || 'AI generation failed');
     } finally {
       setAiLoading(false);
@@ -236,14 +515,12 @@ const DashboardPage = () => {
       category,
       savedAt: new Date().toLocaleString(),
       type: category.toLowerCase().replace(' ', '_'),
-      title: `${category} - ${new Date().toLocaleDateString()}`
+      title: `${category} - ${new Date().toLocaleDateString()}`,
     };
 
     const existing = JSON.parse(localStorage.getItem('adaptdoc_documents') || '[]');
-    const updated = [draft, ...existing];
-    localStorage.setItem('adaptdoc_documents', JSON.stringify(updated));
-    setDocuments(updated);
-
+    localStorage.setItem('adaptdoc_documents', JSON.stringify([draft, ...existing]));
+    setDocuments([draft, ...existing]);
     alert(`${category} draft saved successfully!`);
   };
 
@@ -254,14 +531,10 @@ const DashboardPage = () => {
   };
 
   const handleOpenDocument = (doc) => {
-    if (doc.category) {
-      setCategory(doc.category);
-    }
-
+    if (doc.category) setCategory(doc.category);
     if (doc.cvData) setCvData(doc.cvData);
     if (doc.coverLetterData) setCoverLetterData(doc.coverLetterData);
     if (doc.proposalData) setProposalData(doc.proposalData);
-
     setActiveTab('create');
   };
 
@@ -275,32 +548,30 @@ const DashboardPage = () => {
       const canvas = await window.html2canvas(previewRef.current, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
       });
 
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
+      const ih = (canvas.height * pw) / canvas.width;
 
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      let left = ih;
+      let pos = 0;
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, pos, pw, ih);
+      left -= ph;
 
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, pageWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position -= pageHeight;
+      while (left > 0) {
+        pos -= ph;
         pdf.addPage();
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, pageWidth, imgHeight);
-        heightLeft -= pageHeight;
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, pos, pw, ih);
+        left -= ph;
       }
 
       pdf.save(`${docType}_document.pdf`);
-    } catch (error) {
-      console.error(error);
+    } catch {
       alert('PDF export failed');
     } finally {
       setPdfLoading(false);
@@ -311,7 +582,6 @@ const DashboardPage = () => {
     try {
       setWordLoading(true);
 
-      const ac = accentColor.replace('#', '');
       const doc = new Document({
         sections: [
           {
@@ -320,45 +590,39 @@ const DashboardPage = () => {
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [new TextRun({ text: cvData.name || '', bold: true, size: 36, color: '1e3a5f' })],
-                spacing: { after: 80 }
+                spacing: { after: 80 },
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [new TextRun({ text: cvData.title || '', size: 22, color: '555555' })],
-                spacing: { after: 60 }
+                spacing: { after: 60 },
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [
-                  new TextRun({
-                    text: `${cvData.location || ''} | ${cvData.email1 || ''} | ${cvData.phone || ''}`,
-                    size: 18,
-                    color: '777777'
-                  })
-                ],
-                spacing: { after: 200 }
+                children: [new TextRun({ text: `${cvData.location || ''} | ${cvData.email1 || ''} | ${cvData.phone || ''}`, size: 18, color: '777777' })],
+                spacing: { after: 200 },
               }),
               new Paragraph({
-                border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '1e3a5f' } },
-                spacing: { after: 160 }
+                border: {
+                  bottom: { style: BorderStyle.SINGLE, size: 6, color: '1e3a5f' },
+                },
+                spacing: { after: 160 },
               }),
               new Paragraph({
                 children: [new TextRun({ text: 'SUMMARY', bold: true, size: 22, color: '1e3a5f' })],
-                spacing: { after: 80 }
+                spacing: { after: 80 },
               }),
               new Paragraph({
                 children: [new TextRun({ text: cvData.summary || '', size: 20, color: '333333' })],
-                spacing: { after: 200 }
-              })
-            ]
-          }
-        ]
+                spacing: { after: 200 },
+              }),
+            ],
+          },
+        ],
       });
 
-      const blob = await Packer.toBlob(doc);
-      saveAs(blob, `${(cvData.name || 'document').replace(/\s+/g, '_')}_CV.docx`);
-    } catch (error) {
-      console.error(error);
+      saveAs(await Packer.toBlob(doc), `${(cvData.name || 'document').replace(/\s+/g, '_')}_CV.docx`);
+    } catch {
       alert('Word export failed');
     } finally {
       setWordLoading(false);
@@ -366,95 +630,68 @@ const DashboardPage = () => {
   };
 
   const renderForm = () => {
-    if (docType === 'cv') {
-      return (
-        <div style={styles.formGrid}>
-          <input style={styles.input} placeholder="Full Name" value={cvData.name || ''} onChange={(e) => updateField('name', e.target.value)} />
-          <input style={styles.input} placeholder="Phone" value={cvData.phone || ''} onChange={(e) => updateField('phone', e.target.value)} />
-          <input style={styles.input} placeholder="Email" value={cvData.email1 || ''} onChange={(e) => updateField('email1', e.target.value)} />
-          <input style={styles.input} placeholder="LinkedIn" value={cvData.linkedin || ''} onChange={(e) => updateField('linkedin', e.target.value)} />
-          <input style={styles.input} placeholder="Job Title" value={typeof cvData.title === 'string' ? cvData.title : ''} onChange={(e) => updateField('title', e.target.value)} />
-          <input style={styles.input} placeholder="Location" value={typeof cvData.location === 'string' ? cvData.location : ''} onChange={(e) => updateField('location', e.target.value)} />
+    const catalogue = FIELD_CATALOGUE[docType] || [];
+    const activeKeys = activeFieldKeys[docType] || [];
+    const visible = catalogue.filter((f) => f.core || activeKeys.includes(f.key));
 
-          <input
-            style={styles.input}
-            placeholder="Skills (comma separated)"
-            value={Array.isArray(cvData.skills) ? cvData.skills.join(', ') : ''}
-            onChange={(e) =>
-              updateField(
-                'skills',
-                e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
-              )
-            }
-          />
+    const getVal = (key) => {
+      const v = currentFields[key];
+      if (v === undefined || v === null) return '';
 
-          <input
-            style={styles.input}
-            placeholder="Education (comma separated)"
-            value={Array.isArray(cvData.education) ? cvData.education.join(', ') : ''}
-            onChange={(e) =>
-              updateField(
-                'education',
-                e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
-              )
-            }
-          />
+      if (key === 'experience' && Array.isArray(v)) {
+        return v
+          .map((e) => {
+            const header = [e.role, e.company, e.period].filter(Boolean).join(' · ');
+            const bullets = Array.isArray(e.bullets) ? e.bullets.join('\n') : '';
+            return [header, bullets].filter(Boolean).join('\n');
+          })
+          .join('\n\n');
+      }
 
-          <textarea
-            style={styles.textareaFull}
-            placeholder="Professional Summary"
-            value={typeof cvData.summary === 'string' ? cvData.summary : ''}
-            onChange={(e) => updateField('summary', e.target.value)}
-          />
+      return v;
+    };
 
-          <textarea
-            style={styles.textareaFull}
-            placeholder="Experience"
-            value={
-              Array.isArray(cvData.experience)
-                ? cvData.experience
-                    .map((exp) =>
-                      typeof exp === 'string'
-                        ? exp
-                        : `${exp.role || ''} at ${exp.company || ''}`.trim()
-                    )
-                    .join(', ')
-                : ''
-            }
-            onChange={(e) =>
-              updateField('experience', [
-                {
-                  company: '',
-                  period: '',
-                  role: e.target.value,
-                  bullets: []
-                }
-              ])
-            }
-          />
-        </div>
-      );
-    }
+    const handleChange = (field, raw) => {
+      if (field.key === 'experience' && docType === 'cv' && typeof raw === 'string') {
+        const blocks = raw.split(/\n\n+/).filter(Boolean);
+        const parsed = blocks.map((block) => {
+          const lines = block.split('\n').filter(Boolean);
+          const header = lines[0] || '';
+          const parts = header.split('·').map((p) => p.trim());
 
-    if (docType === 'cover_letter') {
-      return (
-        <div style={styles.formGrid}>
-          <input style={styles.input} placeholder="Full Name" value={coverLetterData.name || ''} onChange={(e) => updateField('name', e.target.value)} />
-          <input style={styles.input} placeholder="Email" value={coverLetterData.email || ''} onChange={(e) => updateField('email', e.target.value)} />
-          <input style={styles.input} placeholder="Company" value={coverLetterData.company || ''} onChange={(e) => updateField('company', e.target.value)} />
-          <input style={styles.input} placeholder="Position" value={coverLetterData.position || ''} onChange={(e) => updateField('position', e.target.value)} />
-          <textarea style={styles.textareaFull} placeholder="Skills" value={coverLetterData.skills || ''} onChange={(e) => updateField('skills', e.target.value)} />
-          <textarea style={styles.textareaFull} placeholder="Experience" value={coverLetterData.experience || ''} onChange={(e) => updateField('experience', e.target.value)} />
-        </div>
-      );
-    }
+          return {
+            role: parts[0] || '',
+            company: parts[1] || '',
+            period: parts[2] || '',
+            bullets: lines.slice(1),
+          };
+        });
+
+        updateField('experience', parsed.length ? parsed : [{ role: raw, company: '', period: '', bullets: [] }]);
+      } else {
+        updateField(field.key, raw);
+      }
+    };
 
     return (
-      <div style={styles.formGrid}>
-        <input style={styles.input} placeholder="Business Name" value={proposalData.business || ''} onChange={(e) => updateField('business', e.target.value)} />
-        <input style={styles.input} placeholder="Target Market" value={proposalData.market || ''} onChange={(e) => updateField('market', e.target.value)} />
-        <textarea style={styles.textareaFull} placeholder="Problem Statement" value={proposalData.problem || ''} onChange={(e) => updateField('problem', e.target.value)} />
-        <textarea style={styles.textareaFull} placeholder="Proposed Solution" value={proposalData.solution || ''} onChange={(e) => updateField('solution', e.target.value)} />
+      <div>
+        <FieldPicker catalogue={catalogue} activeKeys={activeKeys} onToggle={toggleField} />
+
+        {visible.map((field) => (
+          <FieldRow
+            key={field.key}
+            field={field}
+            value={getVal(field.key)}
+            onChange={(v) => handleChange(field, v)}
+            onRemove={() => toggleField(field.key)}
+          />
+        ))}
+
+        {visible.length === catalogue.filter((f) => f.core).length && (
+          <div style={{ padding: '24px 20px', textAlign: 'center', color: '#b0bec5', fontSize: 13 }}>
+            ↑ Select fields above to build your document
+          </div>
+        )}
       </div>
     );
   };
@@ -498,8 +735,11 @@ const DashboardPage = () => {
     );
   };
 
+  const badgeBg = { cv: '#dbeafe', cover_letter: '#dcfce7', business_proposal: '#fef9c3' };
+  const badgeFg = { cv: '#1e40af', cover_letter: '#15803d', business_proposal: '#92400e' };
+
   return (
-    <div style={styles.page}>
+    <div style={s.page}>
       <Sidebar
         activeTab={activeTab}
         onNavigate={setActiveTab}
@@ -511,183 +751,278 @@ const DashboardPage = () => {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Navbar onToggleSidebar={() => setSidebarOpen((p) => !p)} user={user} onLogout={logoutUser} />
 
-        <div style={styles.content}>
+        <div style={s.content}>
           {activeTab === 'home' && (
-            <HomeTab
-              user={user}
-              documents={documents}
-              onNavigate={setActiveTab}
-              loadingDocuments={loadingDocuments}
-            />
+            <HomeTab user={user} documents={documents} onNavigate={setActiveTab} loadingDocuments={loadingDocuments} />
           )}
 
           {activeTab === 'create' && (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-              <DocumentEditor
-                category={category}
-                onCategoryChange={setCategory}
-                editMode={editMode}
-                onToggleEditMode={() => setEditMode((p) => !p)}
-                onSaveDraft={handleSaveDraft}
-              />
+            <div style={s.createLayout}>
+              <div style={s.leftPanel}>
+                <div style={s.leftHeader}>
+                  <DocumentEditor
+                    category={category}
+                    onCategoryChange={setCategory}
+                    editMode={editMode}
+                    onToggleEditMode={() => setEditMode((p) => !p)}
+                    onSaveDraft={handleSaveDraft}
+                  />
+                </div>
 
-              {renderForm()}
+                <div style={s.formScroll}>{renderForm()}</div>
 
-              <div style={styles.buttonRow}>
-                <button style={styles.primaryBtn} onClick={handleGenerate} disabled={aiLoading}>
-                  {aiLoading ? 'Generating...' : 'Generate with AI'}
-                </button>
+                <div style={s.actionBar}>
+                  <button
+                    style={{ ...s.btnGenerate, ...(aiLoading ? s.btnDisabled : {}) }}
+                    onClick={handleGenerate}
+                    disabled={aiLoading}
+                  >
+                    <SparkleIcon />
+                    {aiLoading ? 'Generating…' : 'Generate with AI'}
+                  </button>
 
-                <button style={styles.secondaryBtn} onClick={handleSaveDraft}>
-                  Save Draft
-                </button>
+                  <div style={s.actionSecondary}>
+                    <button style={s.btnIcon} onClick={handleSaveDraft} title="Save draft">
+                      <SaveIcon />
+                      <span>Save</span>
+                    </button>
 
-                <button style={styles.secondaryBtn} onClick={handleDownloadPDF} disabled={pdfLoading}>
-                  {pdfLoading ? 'Exporting...' : 'Download PDF'}
-                </button>
+                    <button
+                      style={{ ...s.btnIcon, ...(pdfLoading ? s.btnDisabled : {}) }}
+                      onClick={handleDownloadPDF}
+                      disabled={pdfLoading}
+                      title="Download PDF"
+                    >
+                      <PdfIcon />
+                      <span>{pdfLoading ? '…' : 'PDF'}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-                <CustomizationPanel cvData={cvData} onCVUpdate={setCvData} />
+              <div style={s.rightPanel}>
+                <RightPanelTabs active={rightTab} onChange={setRightTab} />
 
-                <DocumentPreview
-                  ref={previewRef}
-                  editMode={editMode}
-                  onToggleEditMode={() => setEditMode((p) => !p)}
-                >
-                  {renderPreview()}
-                </DocumentPreview>
+                <div style={s.rightContent}>
+                  {rightTab === 'preview' && (
+                    <div style={s.previewWrap}>
+                      <DocumentPreview
+                        ref={previewRef}
+                        editMode={editMode}
+                        onToggleEditMode={() => setEditMode((p) => !p)}
+                      >
+                        {renderPreview()}
+                      </DocumentPreview>
+                    </div>
+                  )}
 
-                <TemplateSelector
-                  theme={theme}
-                  onThemeChange={setTheme}
-                  fontSize={fontSize}
-                  onFontSizeChange={setFontSize}
-                  accentColor={accentColor}
-                  onAccentChange={setAccentColor}
-                  onDownloadPDF={handleDownloadPDF}
-                  pdfLoading={pdfLoading}
-                  onDownloadWord={handleDownloadWord}
-                  wordLoading={wordLoading}
-                  thumbnail={renderPreview()}
-                />
+                  {rightTab === 'style' && (
+                    <div style={s.panelScroll}>
+                      <CustomizationPanel
+                        cvData={cvData}
+                        onCVUpdate={setCvData}
+                        coverLetterData={coverLetterData}
+                        onCoverLetterUpdate={setCoverLetterData}
+                        proposalData={proposalData}
+                        onProposalUpdate={setProposalData}
+                        docType={docType}
+                      />
+                    </div>
+                  )}
+
+                  {rightTab === 'templates' && (
+                    <div style={s.panelScroll}>
+                      <TemplateSelector
+                        theme={theme}
+                        onThemeChange={setTheme}
+                        fontSize={fontSize}
+                        onFontSizeChange={setFontSize}
+                        fontFamily={fontFamily}
+                        onFontFamilyChange={setFontFamily}
+                        accentColor={accentColor}
+                        onAccentChange={setAccentColor}
+                        spacing={spacing}
+                        onSpacingChange={setSpacing}
+                        paperSize={paperSize}
+                        onPaperSizeChange={setPaperSize}
+                        showPageNumbers={showPageNumbers}
+                        onShowPageNumbersChange={setShowPageNumbers}
+                        showWatermark={showWatermark}
+                        onShowWatermarkChange={setShowWatermark}
+                        onDownloadPDF={handleDownloadPDF}
+                        pdfLoading={pdfLoading}
+                        onDownloadWord={handleDownloadWord}
+                        wordLoading={wordLoading}
+                        thumbnail={renderPreview()}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
           {activeTab === 'documents' && (
-            <div style={{ padding: 40, overflow: 'auto', flex: 1 }}>
-              <div style={{ maxWidth: 1200 }}>
-                <h2 style={{ color: '#1e3a5f', marginBottom: 8, fontSize: 24, fontWeight: 700 }}>My Documents</h2>
-                <p style={{ color: '#64748b', marginBottom: 28 }}>Manage all your saved documents</p>
+            <div style={s.tabPage}>
+              <div style={s.tabHeader}>
+                <div>
+                  <h2 style={s.tabTitle}>My Documents</h2>
+                  <p style={s.tabSubtitle}>Manage and resume your saved work</p>
+                </div>
+                <button style={s.btnGenerate} onClick={() => setActiveTab('create')}>
+                  + New Document
+                </button>
+              </div>
 
-                {loadingDocuments && <p style={{ color: '#94a3b8' }}>Loading documents...</p>}
+              {loadingDocuments && (
+                <div style={s.emptyState}>
+                  <div style={s.spinner} />
+                  <p style={{ color: '#94a3b8', marginTop: 14, fontSize: 14 }}>Loading…</p>
+                </div>
+              )}
 
-                {!loadingDocuments && documents.length === 0 && (
-                  <div
-                    style={{
-                      background: '#fff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: 12,
-                      padding: 40,
-                      textAlign: 'center',
-                      color: '#64748b'
-                    }}
-                  >
-                    <p>
-                      No documents yet.
-                      <button
-                        onClick={() => setActiveTab('create')}
-                        style={{ background: 'none', border: 'none', color: '#1e3a5f', fontWeight: 600, cursor: 'pointer' }}
-                      >
-                        {' '}Create one to get started →
-                      </button>
-                    </p>
-                  </div>
-                )}
+              {!loadingDocuments && documents.length === 0 && (
+                <div style={s.emptyState}>
+                  <div style={{ fontSize: 44, marginBottom: 14 }}>📄</div>
+                  <h3 style={{ color: '#334155', fontWeight: 600, margin: '0 0 8px' }}>No documents yet</h3>
+                  <p style={{ color: '#94a3b8', fontSize: 14, margin: '0 0 22px' }}>
+                    Create your first document to get started
+                  </p>
+                  <button style={s.btnGenerate} onClick={() => setActiveTab('create')}>
+                    Create one now →
+                  </button>
+                </div>
+              )}
 
-                {!loadingDocuments && documents.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 16 }}>
-                    {documents.map((doc) => (
+              {!loadingDocuments && documents.length > 0 && (
+                <div style={s.docGrid}>
+                  {documents.map((doc) => {
+                    const dt = doc.type || 'cv';
+
+                    return (
                       <div
                         key={doc.id}
-                        style={{
-                          background: '#fff',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: 10,
-                          padding: 16,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s',
-                          boxShadow: '0 1px 3px #0001'
-                        }}
+                        style={s.docCard}
                         onClick={() => handleOpenDocument(doc)}
-                        onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 12px #0004')}
-                        onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 1px 3px #0001')}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.10)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)';
+                        }}
                       >
-                        <div>
-                          <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 14, marginBottom: 4 }}>{doc.title}</div>
-                          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Type: {doc.type}</div>
-                          <div style={{ fontSize: 12, color: '#94a3b8' }}>Saved: {doc.savedAt}</div>
+                        <div style={{ ...s.docCardTop, background: accentColor }}>
+                          <span style={{ fontSize: 28 }}>
+                            {dt === 'cv' ? '📋' : dt === 'cover_letter' ? '✉️' : '💼'}
+                          </span>
                         </div>
 
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteDocument(doc.id);
-                          }}
-                          style={{
-                            marginTop: 12,
-                            background: '#fef2f2',
-                            border: '1px solid #fee2e2',
-                            borderRadius: 6,
-                            padding: '6px 12px',
-                            cursor: 'pointer',
-                            fontSize: 12,
-                            color: '#dc2626',
-                            fontWeight: 500
-                          }}
-                        >
-                          Delete
-                        </button>
+                        <div style={s.docCardBody}>
+                          <div
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: 20,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              background: badgeBg[dt] || '#f1f5f9',
+                              color: badgeFg[dt] || '#475569',
+                              marginBottom: 8,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.05em',
+                            }}
+                          >
+                            {dt.replace('_', ' ')}
+                          </div>
+
+                          <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 14, marginBottom: 4 }}>
+                            {doc.title}
+                          </div>
+
+                          <div style={{ fontSize: 12, color: '#94a3b8' }}>Saved {doc.savedAt}</div>
+                        </div>
+
+                        <div style={s.docCardFooter}>
+                          <button
+                            style={s.btnOpenDoc}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenDocument(doc);
+                            }}
+                          >
+                            Open
+                          </button>
+
+                          <button
+                            style={s.btnDeleteDoc}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteDocument(doc.id);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === 'settings' && (
-            <div style={{ padding: 40, overflow: 'auto', flex: 1 }}>
-              <div style={{ maxWidth: 600 }}>
-                <h2 style={{ color: '#1e3a5f', marginBottom: 8, fontSize: 24, fontWeight: 700 }}>Settings</h2>
-
-                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24, marginBottom: 16 }}>
-                  <h3 style={{ color: '#1e3a5f', marginBottom: 16, fontWeight: 600 }}>Account Information</h3>
-
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', marginBottom: 4, color: '#475569', fontWeight: 500, fontSize: 14 }}>Name</label>
-                    <input
-                      type="text"
-                      value={user?.name || user?.email || 'User'}
-                      readOnly
-                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 14 }}
-                    />
-                  </div>
-
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', marginBottom: 4, color: '#475569', fontWeight: 500, fontSize: 14 }}>Email</label>
-                    <input
-                      type="email"
-                      value={user?.email || ''}
-                      readOnly
-                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 14 }}
-                    />
-                  </div>
+            <div style={s.tabPage}>
+              <div style={s.tabHeader}>
+                <div>
+                  <h2 style={s.tabTitle}>Settings</h2>
+                  <p style={s.tabSubtitle}>Manage your account preferences</p>
                 </div>
+              </div>
+
+              <div style={s.settingsCard}>
+                <h3 style={{ color: '#0f172a', fontWeight: 700, fontSize: 16, margin: '0 0 20px' }}>
+                  Account Information
+                </h3>
+
+                {[
+                  { label: 'Name', type: 'text', value: user?.name || user?.email || 'User' },
+                  { label: 'Email', type: 'email', value: user?.email || '' },
+                ].map((f) => (
+                  <div key={f.label} style={{ marginBottom: 18 }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        marginBottom: 6,
+                        color: '#475569',
+                        fontWeight: 600,
+                        fontSize: 13,
+                      }}
+                    >
+                      {f.label}
+                    </label>
+
+                    <input
+                      type={f.type}
+                      value={f.value}
+                      readOnly
+                      style={{
+                        width: '100%',
+                        padding: '9px 13px',
+                        border: '1.5px solid #e2e8f0',
+                        borderRadius: 9,
+                        fontSize: 13,
+                        color: '#64748b',
+                        background: '#f8fafc',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                ))}
+
+                <div style={{ height: 1, background: '#f1f5f9', margin: '22px 0' }} />
 
                 <button
                   onClick={() => {
@@ -695,17 +1030,20 @@ const DashboardPage = () => {
                     navigate('/login');
                   }}
                   style={{
-                    background: '#dc2626',
-                    color: '#fff',
-                    border: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: '#fef2f2',
+                    color: '#dc2626',
+                    border: '1.5px solid #fee2e2',
+                    padding: '9px 16px',
                     borderRadius: 8,
-                    padding: '10px 20px',
                     cursor: 'pointer',
+                    fontSize: 13,
                     fontWeight: 600,
-                    fontSize: 14
                   }}
                 >
-                  Logout
+                  Sign Out
                 </button>
               </div>
             </div>
@@ -716,70 +1054,235 @@ const DashboardPage = () => {
   );
 };
 
-const styles = {
+/* ══════════════════════════════════════════════════
+   STYLES
+══════════════════════════════════════════════════ */
+const s = {
   page: {
     display: 'flex',
     minHeight: '100vh',
-    fontFamily: "'Segoe UI',system-ui,sans-serif",
-    background: '#f1f5f9'
-  },
-  main: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    overflowY: 'auto'
+    fontFamily: "'Inter','Segoe UI',system-ui,sans-serif",
+    background: '#f8fafc',
+    color: '#0f172a',
   },
   content: {
     flex: 1,
     overflowY: 'auto',
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
   },
-  formGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    gap: 12,
-    background: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    border: '1px solid #e2e8f0'
-  },
-  input: {
-    padding: 10,
-    border: '1px solid #cbd5e1',
-    borderRadius: 8
-  },
-  textareaFull: {
-    gridColumn: '1 / -1',
-    padding: 10,
-    border: '1px solid #cbd5e1',
-    borderRadius: 8,
-    minHeight: 90
-  },
-  buttonRow: {
+
+  createLayout: {
     display: 'flex',
-    gap: 12,
-    flexWrap: 'wrap',
-    padding: '12px 24px',
-    background: '#fff',
-    borderBottom: '1px solid #e2e8f0'
+    flex: 1,
+    minHeight: 0,
+    height: '100%',
   },
-  primaryBtn: {
+
+  leftPanel: {
+    width: 420,
+    minWidth: 340,
+    maxWidth: 480,
+    display: 'flex',
+    flexDirection: 'column',
+    borderRight: '1px solid #e2e8f0',
+    background: '#ffffff',
+    overflow: 'hidden',
+  },
+  leftHeader: {
+    flexShrink: 0,
+  },
+  formScroll: {
+    flex: 1,
+    overflowY: 'auto',
+    paddingBottom: 8,
+  },
+
+  actionBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '14px 20px',
+    borderTop: '1px solid #e2e8f0',
+    background: '#ffffff',
+    flexShrink: 0,
+  },
+  actionSecondary: {
+    display: 'flex',
+    gap: 8,
+    marginLeft: 'auto',
+  },
+
+  rightPanel: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    overflow: 'hidden',
+    background: '#f8fafc',
+  },
+  rightContent: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  previewWrap: {
+    flex: 1,
+    overflow: 'auto',
+    padding: '24px',
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  panelScroll: {
+    flex: 1,
+    overflow: 'auto',
+  },
+
+  btnGenerate: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 7,
     background: '#1e3a5f',
     color: '#fff',
     border: 'none',
-    padding: '10px 16px',
-    borderRadius: 8,
-    cursor: 'pointer'
+    padding: '10px 18px',
+    borderRadius: 9,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
   },
-  secondaryBtn: {
-    background: '#e2e8f0',
+  btnIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    background: 'transparent',
+    color: '#475569',
+    border: '1.5px solid #e2e8f0',
+    padding: '8px 13px',
+    borderRadius: 9,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+  },
+  btnDisabled: {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  },
+
+  tabPage: {
+    padding: '32px 40px',
+    flex: 1,
+    overflow: 'auto',
+  },
+  tabHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 28,
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  tabTitle: {
     color: '#0f172a',
-    border: 'none',
+    fontSize: 22,
+    fontWeight: 700,
+    margin: '0 0 4px',
+    letterSpacing: '-0.01em',
+  },
+  tabSubtitle: {
+    color: '#64748b',
+    fontSize: 14,
+    margin: 0,
+  },
+
+  docGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+    gap: 16,
+  },
+  docCard: {
+    background: '#fff',
+    border: '1px solid #e2e8f0',
+    borderRadius: 12,
+    overflow: 'hidden',
+    cursor: 'pointer',
+    transition: 'transform 0.15s, box-shadow 0.15s',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  docCardTop: {
+    height: 72,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  docCardBody: {
+    padding: '14px 16px',
+    flex: 1,
+  },
+  docCardFooter: {
+    display: 'flex',
+    gap: 8,
     padding: '10px 16px',
-    borderRadius: 8,
-    cursor: 'pointer'
-  }
+    borderTop: '1px solid #f1f5f9',
+  },
+  btnOpenDoc: {
+    flex: 1,
+    background: '#1e3a5f',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    padding: '7px 0',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  btnDeleteDoc: {
+    flex: 1,
+    background: '#fef2f2',
+    color: '#dc2626',
+    border: '1px solid #fee2e2',
+    borderRadius: 6,
+    padding: '7px 0',
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: 'pointer',
+  },
+
+  emptyState: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '64px 20px',
+    background: '#fff',
+    borderRadius: 16,
+    border: '1px dashed #cbd5e1',
+    textAlign: 'center',
+  },
+  spinner: {
+    width: 32,
+    height: 32,
+    border: '3px solid #e2e8f0',
+    borderTop: '3px solid #1e3a5f',
+    borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
+  },
+
+  settingsCard: {
+    background: '#fff',
+    border: '1px solid #e2e8f0',
+    borderRadius: 14,
+    padding: 28,
+    maxWidth: 520,
+  },
 };
 
 export default DashboardPage;
