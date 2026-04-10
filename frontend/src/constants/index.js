@@ -1,22 +1,130 @@
 // client/src/constants/index.js
 
 export const THEME_CONFIGS = {
-  Modern:  { label: 'Modern',  desc: 'Clean sidebar layout with sharp accents',      bodyFont: "'Lato', sans-serif",              displayFont: "'Playfair Display', Georgia, serif" },
-  Classic: { label: 'Classic', desc: 'Traditional centered header, ruled sections',  bodyFont: "'EB Garamond', Garamond, serif",   displayFont: "'EB Garamond', Garamond, serif"    },
-  Minimal: { label: 'Minimal', desc: 'Ultra-sparse whitespace-first design',          bodyFont: "'DM Sans', sans-serif",            displayFont: "'DM Sans', sans-serif"             },
-  Bold:    { label: 'Bold',    desc: 'Dark header band, high-contrast impact',        bodyFont: "'Barlow', sans-serif",             displayFont: "'Barlow Condensed', sans-serif"    },
+  // ── Original 4 ──────────────────────────────────────────────
+  Modern: {
+    label: 'Modern',
+    desc:  'Clean sidebar layout with sharp accents',
+    bodyFont:    "'Lato', sans-serif",
+    displayFont: "'Playfair Display', Georgia, serif",
+  },
+  Classic: {
+    label: 'Classic',
+    desc:  'Traditional centered header, ruled sections',
+    bodyFont:    "'EB Garamond', Garamond, serif",
+    displayFont: "'EB Garamond', Garamond, serif",
+  },
+  Minimal: {
+    label: 'Minimal',
+    desc:  'Ultra-sparse whitespace-first design',
+    bodyFont:    "'DM Sans', sans-serif",
+    displayFont: "'DM Sans', sans-serif",
+  },
+  Bold: {
+    label: 'Bold',
+    desc:  'Dark header band, high-contrast impact',
+    bodyFont:    "'Barlow', sans-serif",
+    displayFont: "'Barlow Condensed', sans-serif",
+  },
+
+  // ── 11 New themes ────────────────────────────────────────────
+  Executive: {
+    label: 'Executive',
+    desc:  'Luxury serif, gold rules, prestige',
+    bodyFont:    "'Cormorant Garamond', serif",
+    displayFont: "'Cormorant Garamond', serif",
+  },
+  Tech: {
+    label: 'Tech',
+    desc:  'Dark terminal, mono font, code feel',
+    bodyFont:    "'Fira Code', monospace",
+    displayFont: "'Fira Code', monospace",
+  },
+  Creative: {
+    label: 'Creative',
+    desc:  'Diagonal block, bold asymmetry',
+    bodyFont:    "'Nunito', sans-serif",
+    displayFont: "'Nunito', sans-serif",
+  },
+  Academic: {
+    label: 'Academic',
+    desc:  'Two-column, dense scholarly layout',
+    bodyFont:    "'Source Serif 4', serif",
+    displayFont: "'Source Serif 4', serif",
+  },
+  Corporate: {
+    label: 'Corporate',
+    desc:  'Structured, tabular, conservative',
+    bodyFont:    "'Roboto', sans-serif",
+    displayFont: "'Roboto', sans-serif",
+  },
+  Timeline: {
+    label: 'Timeline',
+    desc:  'Vertical timeline for experience',
+    bodyFont:    "'Mulish', sans-serif",
+    displayFont: "'Mulish', sans-serif",
+  },
+  Infographic: {
+    label: 'Infographic',
+    desc:  'Skill bars, icon badges, visual data',
+    bodyFont:    "'Poppins', sans-serif",
+    displayFont: "'Poppins', sans-serif",
+  },
+  Nordic: {
+    label: 'Nordic',
+    desc:  'Scandinavian calm, generous whitespace',
+    bodyFont:    "'Inter', sans-serif",
+    displayFont: "'Inter', sans-serif",
+  },
+  Elegant: {
+    label: 'Elegant',
+    desc:  'All-caps headers, thin diamond rules',
+    bodyFont:    "'Libre Baskerville', serif",
+    displayFont: "'Libre Baskerville', serif",
+  },
+  Chicago: {
+    label: 'Chicago',
+    desc:  'Newspaper editorial, two columns',
+    bodyFont:    "'Playfair Display', Georgia, serif",
+    displayFont: "'Playfair Display', Georgia, serif",
+  },
+  Sunset: {
+    label: 'Sunset',
+    desc:  'Warm gradient sidebar, soft tones',
+    bodyFont:    "'Quicksand', sans-serif",
+    displayFont: "'Quicksand', sans-serif",
+  },
 };
 
-export const THEME_LIST    = ['Modern', 'Classic', 'Minimal', 'Bold'];
+export const THEME_LIST = [
+  'Modern',
+  'Classic',
+  'Minimal',
+  'Bold',
+  'Executive',
+  'Tech',
+  'Creative',
+  'Academic',
+  'Corporate',
+  'Timeline',
+  'Infographic',
+  'Nordic',
+  'Elegant',
+  'Chicago',
+  'Sunset',
+];
+
+// ── Everything below is unchanged from your original file ─────
+
 export const CATEGORIES    = ['CV', 'Cover Letter', 'Proposal'];
 export const FONT_SIZES    = ['10 pt', '11 pt', '12 pt', '14 pt'];
 export const COLOR_SCHEMES = ['#1e3a5f', '#3b82f6', '#6366f1', '#0f766e', '#64748b', '#94a3b8', '#cbd5e1'];
 
 export const SIDEBAR_ITEMS = [
-  { id: 'home',      icon: '⊞', label: 'Dashboard'       },
-  { id: 'create',   icon: '✦', label: 'Create Document'  },
-  { id: 'documents', icon: '📄', label: 'My Documents'    },
-  { id: 'settings',  icon: '⚙', label: 'Settings'        },
+  { id: 'home',      icon: '⊞', label: 'Dashboard'      },
+  { id: 'create',    icon: '✦', label: 'Create Document' },
+  { id: 'documents', icon: '📄', label: 'My Documents'   },
+  { id: 'settings',  icon: '⚙', label: 'Settings'       },
 ];
 
 export const DEFAULT_CV = {

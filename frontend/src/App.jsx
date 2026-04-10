@@ -10,6 +10,7 @@ import Dashboard from "./pages/dashboard/DashboardPage";
 import VerifyEmail from "./pages/auth/VerifyEmail";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
+import LandingPage from "./pages/LandingPage";
 
 import "./App.css";
 
@@ -18,14 +19,13 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Public routes */}
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/verify-email/:token" element={<VerifyEmail />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-      {/* Protected route */}
       <Route
         path="/dashboard"
         element={
@@ -35,19 +35,10 @@ function AppRoutes() {
         }
       />
 
-      {/* Root redirect */}
-      <Route
-        path="/"
-        element={
-          user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
-        }
-      />
-
-      {/* Fallback */}
       <Route
         path="*"
         element={
-          user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
+          user ? <Navigate to="/dashboard" replace /> : <Navigate to="/" replace />
         }
       />
     </Routes>
