@@ -27,6 +27,12 @@ const userSchema = new mongoose.Schema(
       default: 'user',
     },
 
+    status: {
+      type: String,
+      enum: ['active', 'restricted'],
+      default: 'active',
+    },
+
     isVerified: {
       type: Boolean,
       default: false,
@@ -51,6 +57,20 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    settings: {
+      appearance: {
+        theme: {
+          type: String,
+          enum: ['light', 'dark'],
+          default: 'dark'
+        },
+        accentColor: {
+          type: String,
+          default: '#57d572'
+        }
+      }
+    }
   },
   { timestamps: true }
 );

@@ -1,10 +1,11 @@
 const GeminiService = require('./GeminiService');
 const OpenAIService = require('./OpenAIService');
+const SystemSetting = require('../../../models/SystemSetting');
+const AIRequestLog = require('../../../models/AIRequestLog');
 
 /**
  * @class FailoverManager
- * @description Manages AI service selection and handles failover logic.
- * It prioritizes Gemini and switches to OpenAI if Gemini fails or times out.
+ * @description Manages AI service selection, failover logic, and metrics logging.
  */
 class FailoverManager {
   constructor() {
@@ -13,13 +14,6 @@ class FailoverManager {
     this.timeoutLimit = 60000;
   }
 
-  /**
-   * Helper function to race the AI call against a timeout.
-   * @param {Object} provider
-   * @param {string} docType
-   * @param {Object} userData
-   * @returns {Promise<Object>}
-   */
   async callWithTimeout(provider, docType, userData) {
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('AI response timeout')), this.timeoutLimit)
@@ -31,28 +25,73 @@ class FailoverManager {
     ]);
   }
 
-  /**
-   * Main function to generate document content with automatic failover.
-   * @param {string} docType
-   * @param {Object} userData
-   * @returns {Promise<Object>}
-   */
-  async generateDocument(docType, userData) {
-    console.log(`Attempting ${docType} generation with Primary (Gemini)...`);
+  async generateDocument(docType, userData, userId) {
+    const startTime = Date.now();
+    let providerUsed = 'gemini';
+    let success = false;
+    let errorMessage = null;
+    let contentResult = null;
 
     try {
-      return await this.callWithTimeout(this.primary, docType, userData);
-    } catch (error) {
-      console.warn(
-        'Primary AI failed or timed out. Switching to Secondary (OpenAI)...',
-        error.message
-      );
+      const settings = await SystemSetting.find({});
+      const settingsMap = settings.reduce((acc, s) => ({ ...acc, [s.key]: s.value }), {});
+      
+      let preferredProvider = settingsMap['preferredProvider'] || 'gemini';
+      let fallbackEnabled = settingsMap['fallbackEnabled'] !== false; // default true
+      let maintenanceMode = settingsMap['maintenanceMode'] === true; // default false
 
-      try {
-        return await this.callWithTimeout(this.secondary, docType, userData);
-      } catch (secondaryError) {
-        console.error('Secondary AI also failed:', secondaryError.message);
-        throw new Error('All AI providers failed. Please try again later.');
+      if (maintenanceMode) {
+        throw new Error('AI Services are currently in maintenance mode. Please try again later.');
+      }
+
+      if (preferredProvider === 'openai') {
+        providerUsed = 'openai';
+        try {
+          contentResult = await this.callWithTimeout(this.secondary, docType, userData);
+        } catch (error) {
+          if (fallbackEnabled) {
+            console.warn('OpenAI failed. Switching to Gemini...', error.message);
+            providerUsed = 'gemini';
+            contentResult = await this.callWithTimeout(this.primary, docType, userData);
+          } else {
+            throw error;
+          }
+        }
+      } else {
+        providerUsed = 'gemini';
+        try {
+          contentResult = await this.callWithTimeout(this.primary, docType, userData);
+        } catch (error) {
+          if (fallbackEnabled) {
+            console.warn('Gemini failed or timed out. Switching to OpenAI...', error.message);
+            providerUsed = 'openai';
+            contentResult = await this.callWithTimeout(this.secondary, docType, userData);
+          } else {
+            throw error;
+          }
+        }
+      }
+      
+      success = true;
+      providerUsed = contentResult.provider || providerUsed;
+      return contentResult;
+
+    } catch (error) {
+      success = false;
+      errorMessage = error.message;
+      console.error('FailoverManager generation failed:', errorMessage);
+      throw new Error(errorMessage || 'All AI providers failed. Please try again later.');
+    } finally {
+      const latencyMs = Date.now() - startTime;
+      if (userId) {
+         await AIRequestLog.create({
+           user: userId,
+           provider: providerUsed,
+           documentType: docType,
+           success,
+           errorMessage,
+           latencyMs
+         }).catch(err => console.error('Failed to log AI request:', err.message));
       }
     }
   }

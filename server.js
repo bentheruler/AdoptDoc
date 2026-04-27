@@ -15,6 +15,7 @@ mongoose.connect(process.env.MONGO_URI)
 
 
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/user', require('./routes/user'));
 
 app.use('/api/ai', require('./server/routes/aiRoutes'));
 
@@ -25,6 +26,8 @@ app.get('/', (req, res) => {
 app.use("/api/documents", require("./routes/documents.js"));
 
 app.use('/api/ai', require('./routes/ai'));
+
+app.use('/api/admin', require('./server/routes/adminRoutes'));
 
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI;

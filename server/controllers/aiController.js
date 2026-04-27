@@ -51,7 +51,8 @@ class AIController {
         {
           ...userData,
           jobDescription: jobDescription || ''
-        }
+        },
+        req.user.id
       );
 
       return res.json({

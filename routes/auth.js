@@ -242,6 +242,10 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    if (user.status === 'restricted') {
+      return res.status(403).json({ message: 'Account is restricted' });
+    }
+
     const accessToken = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
@@ -262,7 +266,9 @@ router.post('/login', async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        status: user.status,
         isVerified: user.isVerified,
+        settings: user.settings,
       },
     });
   } catch (error) {
