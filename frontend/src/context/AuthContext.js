@@ -35,6 +35,26 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('user', JSON.stringify(userData));
   };
 
+  // Update user function
+  const updateUser = (userData) => {
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+  };
+
+  // Theme application
+  useEffect(() => {
+    if (user?.settings?.appearance) {
+      const { theme, accentColor } = user.settings.appearance;
+      document.documentElement.setAttribute('data-theme', theme || 'dark');
+      if (accentColor) {
+        document.documentElement.style.setProperty('--accent-color', accentColor);
+      }
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.style.setProperty('--accent-color', '#57d572');
+    }
+  }, [user?.settings?.appearance]);
+
   // Logout function
   const logoutUser = () => {
     setUser(null);
@@ -49,6 +69,7 @@ export const AuthProvider = ({ children }) => {
     token,
     loading,
     loginUser,
+    updateUser,
     logoutUser,
     isAuthenticated: !!user,
   };
